@@ -1,16 +1,49 @@
 import { ChatCompletionResponse, ChatCompletionChunkResponse, ChatMessage } from '../types/openai.js';
-import { config } from '../config.js';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const getDirname = () => {
+  if (typeof __dirname !== 'undefined') return __dirname;
+  return dirname(fileURLToPath(import.meta.url));
+};
+
+const templatesDir = join(getDirname(), '../templates');
+const responseTemplate = readFileSync(join(templatesDir, 'response.md'), 'utf-8');
+
+const reasoningTemplates: Record<string, string> = {
+  low: readFileSync(join(templatesDir, 'reasoning-low.md'), 'utf-8'),
+  medium: readFileSync(join(templatesDir, 'reasoning-medium.md'), 'utf-8'),
+  high: readFileSync(join(templatesDir, 'reasoning-high.md'), 'utf-8'),
+};
 
 export function generateId(): string {
   return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
 }
 
+function splitIntoChunks(text: string): string[] {
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const remaining = text.length - i;
+    const chunkSize = Math.min(Math.floor(Math.random() * 5) + 1, remaining);
+    chunks.push(text.slice(i, i + chunkSize));
+    i += chunkSize;
+  }
+  return chunks;
+}
+
+function getReasoningContent(reasoningEffort: string = 'medium'): string {
+  return reasoningTemplates[reasoningEffort] || reasoningTemplates.medium;
+}
+
 export function createNonStreamingResponse(
   model: string,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  reasoningEffort: string = 'medium'
 ): ChatCompletionResponse {
   const lastMessage = messages[messages.length - 1];
-  const responseContent = config.defaultResponse;
+  const chainOfThought = getReasoningContent(reasoningEffort);
 
   return {
     id: generateId(),
@@ -22,7 +55,8 @@ export function createNonStreamingResponse(
         index: 0,
         message: {
           role: 'assistant',
-          content: responseContent,
+          content: responseTemplate,
+          reasoning_content: chainOfThought,
         },
         finish_reason: 'stop',
       },
@@ -37,12 +71,14 @@ export function createNonStreamingResponse(
 
 export function* createStreamingResponse(
   model: string,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  reasoningEffort: string = 'medium'
 ): Generator<ChatCompletionChunkResponse> {
-  const responseContent = config.defaultResponse;
-  const words = responseContent.split(' ');
+  const lastMessage = messages[messages.length - 1];
+  const reasoningContent = getReasoningContent(reasoningEffort);
 
-  for (let i = 0; i < words.length; i++) {
+  const reasonChunks = splitIntoChunks(reasoningContent);
+  for (const chunk of reasonChunks) {
     yield {
       id: generateId(),
       object: 'chat.completion.chunk',
@@ -52,7 +88,26 @@ export function* createStreamingResponse(
         {
           index: 0,
           delta: {
-            content: words[i] + (i < words.length - 1 ? ' ' : ''),
+            reasoning_content: chunk,
+          },
+          finish_reason: null,
+        },
+      ],
+    };
+  }
+
+  const contentChunks = splitIntoChunks(responseTemplate);
+  for (const chunk of contentChunks) {
+    yield {
+      id: generateId(),
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {
+            content: chunk,
           },
           finish_reason: null,
         },

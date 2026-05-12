@@ -6,7 +6,7 @@ import { config } from '../config.js';
 const router = Router();
 
 router.post('/v1/chat/completions', (req: Request<{}, {}, ChatCompletionRequest>, res: Response) => {
-  const { model = config.defaultModel, messages, stream = false } = req.body;
+  const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'medium' } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages is required' });
@@ -18,7 +18,7 @@ router.post('/v1/chat/completions', (req: Request<{}, {}, ChatCompletionRequest>
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const generator = createStreamingResponse(model, messages);
+    const generator = createStreamingResponse(model, messages, reasoning_effort);
 
     const sendChunk = (): void => {
       const result = generator.next();
@@ -37,7 +37,7 @@ router.post('/v1/chat/completions', (req: Request<{}, {}, ChatCompletionRequest>
     return;
   }
 
-  const response = createNonStreamingResponse(model, messages);
+  const response = createNonStreamingResponse(model, messages, reasoning_effort);
   res.json(response);
 });
 

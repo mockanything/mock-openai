@@ -1,6 +1,7 @@
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  reasoning_content?: string;
 }
 
 export interface ChatCompletionRequest {
@@ -15,6 +16,7 @@ export interface ChatCompletionRequest {
   presence_penalty?: number;
   frequency_penalty?: number;
   user?: string;
+  reasoning_effort?: 'low' | 'medium' | 'high';
 }
 
 export interface ChatCompletionChoice {
