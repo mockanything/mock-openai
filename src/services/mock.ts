@@ -9,7 +9,7 @@ const getDirname = () => {
 };
 
 const templatesDir = join(getDirname(), '../templates');
-const responseTemplate = readFileSync(join(templatesDir, 'response.md'), 'utf-8');
+const responseTemplate = readFileSync(join(templatesDir, 'glamour.md'), 'utf-8');
 
 const reasoningTemplates: Record<string, string> = {
   low: readFileSync(join(templatesDir, 'reasoning-low.md'), 'utf-8'),

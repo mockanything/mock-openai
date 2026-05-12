@@ -1,6 +1,7 @@
 import express from 'express';
 import { config } from './config.js';
 import chatRouter from './routes/chat.js';
+import modelsRouter from './routes/models.js';
 
 const app = express();
 
@@ -10,6 +11,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use(modelsRouter);
 app.use(chatRouter);
 
 app.listen(config.port, () => {
