@@ -1,5 +1,5 @@
 import { ChatCompletionResponse, ChatCompletionChunkResponse, ChatMessage, Tool, ToolCall, ToolChoice } from '../types/openai.js';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -8,8 +8,11 @@ const getDirname = () => {
   return dirname(fileURLToPath(import.meta.url));
 };
 
-const templatesDir = join(getDirname(), '../templates');
-const responseTemplate = readFileSync(join(templatesDir, 'glamour.md'), 'utf-8');
+const responseDir = join(getDirname(), '../templates/response');
+const responseTemplates: string[] = readdirSync(responseDir)
+  .filter(f => f.endsWith('.md'))
+  .sort()
+  .map(f => readFileSync(join(responseDir, f), 'utf-8'));
 
 const reasoningDir = join(getDirname(), '../templates/reasoning');
 const reasoningTemplates: Record<string, string> = {
@@ -41,6 +44,11 @@ function splitIntoChunks(text: string): string[] {
 
 function getReasoningContent(reasoningEffort: string = 'medium'): string {
   return reasoningTemplates[reasoningEffort] || reasoningTemplates.medium;
+}
+
+function getResponseTemplate(messages: ChatMessage[]): string {
+  const userCount = messages.filter(m => m.role === 'user').length;
+  return responseTemplates[userCount % responseTemplates.length];
 }
 
 function isFlashModel(model: string): boolean {
@@ -167,7 +175,7 @@ export function createNonStreamingResponse(
       index: 0,
       message: {
         role: 'assistant',
-        content: responseTemplate,
+        content: getResponseTemplate(messages),
         reasoning_content: chainOfThought,
       },
       finish_reason: 'stop',
@@ -261,7 +269,7 @@ export function* createStreamingResponse(
     return;
   }
 
-  const contentChunks = splitIntoChunks(responseTemplate);
+  const contentChunks = splitIntoChunks(getResponseTemplate(messages));
   for (const chunk of contentChunks) {
     yield {
       id: generateId(),
