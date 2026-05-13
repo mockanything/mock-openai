@@ -48,7 +48,7 @@ function getReasoningContent(reasoningEffort: string = 'medium'): string {
 
 function getResponseTemplate(messages: ChatMessage[]): string {
   const userCount = messages.filter(m => m.role === 'user').length;
-  return responseTemplates[userCount % responseTemplates.length];
+  return responseTemplates[(userCount - 1 + responseTemplates.length) % responseTemplates.length];
 }
 
 function isFlashModel(model: string): boolean {
