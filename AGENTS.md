@@ -14,17 +14,22 @@ No test or lint infrastructure exists. `npm run lint` in package.json will fail 
 ## Project Structure
 
 - `src/index.ts` — Express server entrypoint, mounts routers
-- `src/config.ts` — Loads `PORT` (default 3000) and `DEFAULT_MODEL` (default `apple-v1-flash`)
+- `src/config.ts` — Loads `PORT`, `DEFAULT_MODEL`, rate limit env vars
 - `src/routes/chat.ts` — `POST /v1/chat/completions` (streaming + non-streaming)
 - `src/routes/models.ts` — `GET /v1/models` (reads `src/templates/models.md`)
-- `src/services/mock.ts` — Core mock response generation (sync)
+- `src/services/mock.ts` — Core mock response generation (sync), tool call simulation
 - `src/types/openai.ts` — OpenAI-compatible request/response types
+- `src/middleware/rate-limit.ts` — Rate limiters for chat (per-model) and models endpoints
+- `src/middleware/body-size-limit.ts` — Flash 1MB body size check
 
 ## Key Quirks
 
 - **ESM path resolution**: Template files loaded via `getDirname()` helper (`fileURLToPath(import.meta.url)`) with a CommonJS fallback, found in `mock.ts` and `models.ts`.
-- **Templates loaded at startup**: `glamour.md` (response content) and `reasoning/*.md` (chain-of-thought, keyed by `low`/`medium`/`high`/`max`) are read synchronously on import.
-- **`src/templates/response/` is NOT loaded** by the server — these files are unused.
+- **Response templates**: `src/templates/response/*.md` sorted by filename, selected by `user role message count % total`.
+- **Reasoning templates**: `reasoning/*.md` keyed by `low`/`medium`/`high`/`max`, loaded synchronously at startup.
 - **Streaming**: SSE with `setTimeout(sendChunk, 0)` — hardcoded 0ms delay, NOT configurable.
+- **Tool calls**: When `tools` provided in request, flash models have 80% chance (or 100% if `tool_choice: "required"`) to call 1–N/2 tools; pro models always call 1–N tools. Arguments are mock-generated from JSON schema.
 - **Models list**: 20 fruit-named models (e.g. `apple-v1-flash`) in `models.md`. Owner mapped by id pattern matching (gpt→openai, claude→anthropic, etc.).
-- **Env vars**: Only `PORT` and `DEFAULT_MODEL` are wired in code. `DEFAULT_RESPONSE` and `STREAM_DELAY` are documented in README but **not implemented**.
+- **Rate limiting**: Per-IP + per-model-suffix (flash 20/min, pro 60/min). Models endpoint 100/min per IP. Configurable via env vars.
+- **Body size**: Global 10MB limit via `express.json()`. Flash models additionally capped at 1MB via middleware.
+- **Env vars wired in code**: `PORT`, `DEFAULT_MODEL`, `RATE_LIMIT_FLASH`, `RATE_LIMIT_PRO`, `RATE_LIMIT_MODELS`. `DEFAULT_RESPONSE` and `STREAM_DELAY` are documented in README but **not implemented**.

@@ -4,11 +4,13 @@ Mock OpenAI API service for development and testing.
 
 ## Features
 
-- `/v1/chat/completions` - Chat completions endpoint
-- `/v1/models` - List available models
-- Streaming support
+- `/v1/chat/completions` — Chat completions endpoint
+- `/v1/models` — List available models
+- Streaming support (SSE)
+- Tool / function calling simulation
 - Chain-of-thought (reasoning_effort)
-- Configurable via environment variables
+- Per-model rate limiting (flash 20/min, pro 60/min)
+- Request body size limits (flash 1MB, pro 10MB)
 
 ## Quick Start
 
@@ -19,14 +21,13 @@ npm run dev
 
 ## Configuration
 
-Create `.env` file (see `.env.example`):
-
 | Variable | Default | Description |
 |----------|---------|-------------|
 | PORT | 3000 | Server port |
-| DEFAULT_MODEL | gpt-3.5-turbo | Default model |
-| DEFAULT_RESPONSE | "This is a mock response..." | Mock response content |
-| STREAM_DELAY | 50 | Stream chunk delay (ms) |
+| DEFAULT_MODEL | apple-v1-flash | Default model |
+| RATE_LIMIT_FLASH | 20 | Flash model requests per minute |
+| RATE_LIMIT_PRO | 60 | Pro model requests per minute |
+| RATE_LIMIT_MODELS | 100 | Models endpoint requests per minute |
 
 ## API
 
@@ -57,6 +58,31 @@ curl -X POST http://localhost:3000/v1/chat/completions \
   }'
 ```
 
+### Tool Calls
+
+```bash
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "What'\''s the weather?"}],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": { "type": "string" }
+            }
+          }
+        }
+      }
+    ],
+    "tool_choice": "required"
+  }'
+```
+
 ### Chain of Thought
 
 ```bash
@@ -76,6 +102,6 @@ curl http://localhost:3000/health
 
 ## Scripts
 
-- `npm run dev` - Development mode
-- `npm run build` - Build
-- `npm start` - Run production
+- `npm run dev` — Development mode with hot reload
+- `npm run build` — Build TypeScript
+- `npm start` — Run production build
