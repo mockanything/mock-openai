@@ -30,7 +30,7 @@ router.post('/v1/chat/completions', (req: Request<{}, {}, ChatCompletionRequest>
 
       res.write(`data: ${JSON.stringify(result.value)}\n\n`);
 
-      setTimeout(sendChunk, config.streamDelay);
+      setTimeout(sendChunk, 0);
     };
 
     sendChunk();

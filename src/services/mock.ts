@@ -11,10 +11,12 @@ const getDirname = () => {
 const templatesDir = join(getDirname(), '../templates');
 const responseTemplate = readFileSync(join(templatesDir, 'glamour.md'), 'utf-8');
 
+const reasoningDir = join(getDirname(), '../templates/reasoning');
 const reasoningTemplates: Record<string, string> = {
-  low: readFileSync(join(templatesDir, 'reasoning-low.md'), 'utf-8'),
-  medium: readFileSync(join(templatesDir, 'reasoning-medium.md'), 'utf-8'),
-  high: readFileSync(join(templatesDir, 'reasoning-high.md'), 'utf-8'),
+  low: readFileSync(join(reasoningDir, '01-low.md'), 'utf-8'),
+  medium: readFileSync(join(reasoningDir, '02-medium.md'), 'utf-8'),
+  high: readFileSync(join(reasoningDir, '03-high.md'), 'utf-8'),
+  max: readFileSync(join(reasoningDir, '04-max.md'), 'utf-8'),
 };
 
 export function generateId(): string {
@@ -74,7 +76,6 @@ export function* createStreamingResponse(
   messages: ChatMessage[],
   reasoningEffort: string = 'medium'
 ): Generator<ChatCompletionChunkResponse> {
-  const lastMessage = messages[messages.length - 1];
   const reasoningContent = getReasoningContent(reasoningEffort);
 
   const reasonChunks = splitIntoChunks(reasoningContent);
