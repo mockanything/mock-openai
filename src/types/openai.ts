@@ -1,8 +1,32 @@
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
   reasoning_content?: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface ToolFunction {
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+}
+
+export interface Tool {
+  type: 'function';
+  function: ToolFunction;
+}
+
+export type ToolChoice = 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
 
 export interface ChatCompletionRequest {
   model: string;
@@ -17,12 +41,14 @@ export interface ChatCompletionRequest {
   frequency_penalty?: number;
   user?: string;
   reasoning_effort?: 'low' | 'medium' | 'high';
+  tools?: Tool[];
+  tool_choice?: ToolChoice;
 }
 
 export interface ChatCompletionChoice {
   index: number;
   message: ChatMessage;
-  finish_reason: 'stop' | 'length' | null;
+  finish_reason: 'stop' | 'length' | 'tool_calls' | null;
 }
 
 export interface ChatCompletionUsage {
@@ -40,10 +66,27 @@ export interface ChatCompletionResponse {
   usage: ChatCompletionUsage;
 }
 
+export interface ToolCallDelta {
+  index: number;
+  id?: string;
+  type?: 'function';
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+export interface ChatCompletionChunkDelta {
+  content?: string | null;
+  reasoning_content?: string;
+  role?: string;
+  tool_calls?: ToolCallDelta[];
+}
+
 export interface ChatCompletionChunkChoice {
   index: number;
-  delta: Partial<ChatMessage>;
-  finish_reason: 'stop' | 'length' | null;
+  delta: ChatCompletionChunkDelta;
+  finish_reason: 'stop' | 'length' | 'tool_calls' | null;
 }
 
 export interface ChatCompletionChunkResponse {
