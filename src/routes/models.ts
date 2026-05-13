@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { modelsLimiter } from '../middleware/rate-limit.js';
 
 const getDirname = () => {
   if (typeof __dirname !== 'undefined') return __dirname;
@@ -24,7 +25,7 @@ const models = modelList.map((id, index) => ({
 
 const router = Router();
 
-router.get('/v1/models', (_req: Request, res: Response) => {
+router.get('/v1/models', modelsLimiter, (_req: Request, res: Response) => {
   res.json({
     object: 'list',
     data: models,

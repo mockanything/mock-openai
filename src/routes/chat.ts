@@ -2,11 +2,12 @@ import { Router, Request, Response } from 'express';
 import { ChatCompletionRequest } from '../types/openai.js';
 import { createNonStreamingResponse, createStreamingResponse } from '../services/mock.js';
 import { config } from '../config.js';
-import { chatLimiter } from '../middleware/rateLimit.js';
+import { chatLimiter } from '../middleware/rate-limit.js';
+import { bodySizeLimit } from '../middleware/body-size-limit.js';
 
 const router = Router();
 
-router.post('/v1/chat/completions', chatLimiter, (req: Request<{}, {}, ChatCompletionRequest>, res: Response) => {
+router.post('/v1/chat/completions', chatLimiter, bodySizeLimit, (req: Request<{}, {}, ChatCompletionRequest>, res: Response) => {
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'medium', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {

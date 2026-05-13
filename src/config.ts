@@ -7,4 +7,5 @@ export const config = {
   defaultModel: process.env.DEFAULT_MODEL || 'apple-v1-flash',
   rateLimitFlash: parseInt(process.env.RATE_LIMIT_FLASH || '20', 10),
   rateLimitPro: parseInt(process.env.RATE_LIMIT_PRO || '60', 10),
+  rateLimitModels: parseInt(process.env.RATE_LIMIT_MODELS || '100', 10),
 };
