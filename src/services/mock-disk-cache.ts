@@ -45,9 +45,6 @@ function buildPrefixHash(messages: ChatMessage[], n: number): string {
 
 export interface CacheEntry {
   prefix: string;
-  createdAt: number;
-  lastAccess: number;
-  source: 'end_position';
 }
 
 export interface CacheHitResult {
@@ -67,8 +64,16 @@ export type CacheCheckResult = CacheHitResult | CacheMissResult;
 // ---- Disk Cache Simulation ----
 // In-memory prefix cache simulation (no actual disk I/O).
 
+const MAX_KEYS = 10_000;
+
 export class DiskCache {
   private map = new Map<string, CacheEntry>();
+
+  private touch(key: string): void {
+    const entry = this.map.get(key)!;
+    this.map.delete(key);
+    this.map.set(key, entry);
+  }
 
   getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
     const n = messages.length;
@@ -76,8 +81,8 @@ export class DiskCache {
     for (let i = n; i >= 1; i--) {
       const key = this.buildKey(messages, i);
       if (this.map.has(key)) {
+        this.touch(key);
         const entry = this.map.get(key)!;
-        entry.lastAccess = Date.now();
         const hitTokens = countRequestTokens(messages.slice(0, i), i === n ? tools : undefined);
         const missTokens = i === n ? 0 : countRequestTokens(messages.slice(i), tools);
         return { hit: true, entry, hitLength: i, hitTokens, missTokens };
@@ -91,12 +96,11 @@ export class DiskCache {
     const n = messages.length;
     const key = this.buildKey(messages, n);
     if (!this.map.has(key)) {
-      this.map.set(key, {
-        prefix: messages.map(m => m.content || '').join('||'),
-        createdAt: Date.now(),
-        lastAccess: Date.now(),
-        source: 'end_position',
-      });
+      if (this.map.size >= MAX_KEYS) {
+        const lruKey = this.map.keys().next().value!;
+        this.map.delete(lruKey);
+      }
+      this.map.set(key, { prefix: messages.map(m => m.content || '').join('||') });
       serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist key=${key}`);
     }
   }
