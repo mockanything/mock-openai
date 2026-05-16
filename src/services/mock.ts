@@ -30,7 +30,7 @@ function generateToolCallId(): string {
   return 'call_' + Math.random().toString(36).substring(2, 15);
 }
 
-function splitIntoChunks(text: string): string[] {
+export function splitIntoChunks(text: string): string[] {
   const chunks: string[] = [];
   let i = 0;
   while (i < text.length) {
@@ -42,11 +42,11 @@ function splitIntoChunks(text: string): string[] {
   return chunks;
 }
 
-function getReasoningContent(reasoningEffort: string = 'medium'): string {
+export function getReasoningContent(reasoningEffort: string = 'medium'): string {
   return reasoningTemplates[reasoningEffort] || reasoningTemplates.medium;
 }
 
-function getResponseTemplate(messages: ChatMessage[]): string {
+export function getResponseTemplate(messages: ChatMessage[]): string {
   const userCount = messages.filter(m => m.role === 'user').length;
   return responseTemplates[(userCount - 1 + responseTemplates.length) % responseTemplates.length];
 }
