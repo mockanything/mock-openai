@@ -1,33 +1,20 @@
 import { ChatMessage, Tool } from '../types/openai.js';
-import { serverLogger } from './logger.js';
-
-export function countTokens(text: string): number {
-  let eng = 0;
-  let chn = 0;
-  for (const ch of text) {
-    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(ch)) {
-      chn++;
-    } else if (/\S/.test(ch)) {
-      eng++;
-    }
-  }
-  return Math.ceil(eng * 0.3 + chn * 0.6);
-}
+import { serverLogger } from '../utils/logger.js';
+import { countTokens, countMessageTokens } from '../utils/helpers.js';
 
 export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): number {
   let total = 0;
   for (const msg of messages) {
-    total += countTokens(msg.content || '');
-    total += countTokens(msg.reasoning_content || '');
-    if (msg.tool_calls) {
-      total += countTokens(JSON.stringify(msg.tool_calls));
-    }
+    total += countMessageTokens(msg);
   }
   if (tools) {
     total += countTokens(JSON.stringify(tools));
   }
   return total;
 }
+
+// ---- Hash Functions ----
+// Cache key format: "N:<hex>" where N = message count, hex = djb2 combined hash.
 
 function djb2(str: string): string {
   let hash = 5381;
@@ -54,13 +41,15 @@ function buildPrefixHash(messages: ChatMessage[], n: number): string {
   return djb2(combined);
 }
 
+// ---- Cache Entry Types ----
+
 export interface CacheEntry {
   prefix: string;
-  content: string | null;
+  content: string;
   hitCount: number;
   createdAt: number;
   lastAccess: number;
-  source: 'end_position' | 'common_prefix';
+  source: 'end_position';
 }
 
 export interface CacheHitResult {
@@ -77,10 +66,13 @@ export interface CacheMissResult {
 
 export type CacheCheckResult = CacheHitResult | CacheMissResult;
 
+// ---- Disk Cache Simulation ----
+// In-memory prefix cache simulation (no actual disk I/O).
+
 export class DiskCache {
   private map = new Map<string, CacheEntry>();
-  private seenPrefixes = new Set<string>();
 
+  // Check for cache hit: full match on all N messages, then partial (longest first).
   getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
     const n = messages.length;
 
@@ -108,6 +100,9 @@ export class DiskCache {
     return { hit: false };
   }
 
+  // Persist two cache units after each request:
+  //   - input_end:  all N messages (request input)
+  //   - output_end: N messages + assistant response (request input + output)
   persistEndPositions(messages: ChatMessage[], responseContent: string): void {
     const n = messages.length;
 
@@ -130,35 +125,13 @@ export class DiskCache {
     if (!this.map.has(fullKey)) {
       this.map.set(fullKey, {
         prefix: [...messages.map(m => m.content || ''), responseContent].join('||'),
-        content: null,
+        content: responseContent,
         hitCount: 0,
         createdAt: Date.now(),
         lastAccess: Date.now(),
         source: 'end_position',
       });
       serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist output_end key=${fullKey}`);
-    }
-  }
-
-  detectCommonPrefix(messages: ChatMessage[], responseContent: string): void {
-    const n = messages.length;
-
-    for (let i = 1; i <= n; i++) {
-      const key = this.buildKey(messages, i);
-
-      if (this.seenPrefixes.has(key) && !this.map.has(key)) {
-        this.map.set(key, {
-          prefix: messages.slice(0, i).map(m => m.content || '').join('||'),
-          content: responseContent,
-          hitCount: 0,
-          createdAt: Date.now(),
-          lastAccess: Date.now(),
-          source: 'common_prefix',
-        });
-        serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist common_prefix key=${key}`);
-      }
-
-      this.seenPrefixes.add(key);
     }
   }
 
