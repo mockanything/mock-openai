@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'mock-openai',
       script: 'dist/index.js',
-      instances: 4,
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
       },
