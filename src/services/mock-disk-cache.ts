@@ -1,3 +1,14 @@
+/**
+ * Simulates OpenAI prompt caching in-memory.
+ *
+ * Cache key: `"N:<djb2-hash>"` where N = message count and the hash is
+ * taken over a lightweight fingerprint (role + content-length + optional
+ * field lengths) rather than raw text, keeping memory usage low.
+ *
+ * Probes prefixes from longest to shortest, returning the longest match.
+ * Entries are stored in an LruMap (10k max, O(1) LRU eviction).
+ */
+
 import { ChatMessage, Tool } from '../types/openai.js';
 import { serverLogger } from '../utils/logger.js';
 import { countTokens, countMessageTokens } from '../utils/helpers.js';
@@ -14,8 +25,7 @@ export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): num
   return total;
 }
 
-// ---- 哈希函数 ----
-// 缓存 key 格式："N:<hex>"，N=消息数，hex = djb2(消息原文拼接)。
+// ---- djb2 hash (Bernstein) ----
 
 function djb2(str: string): string {
   let hash = 5381;
@@ -26,7 +36,7 @@ function djb2(str: string): string {
   return (hash >>> 0).toString(16);
 }
 
-// 将消息编码为角色+各字段长度，避免搬运实际内容字符串
+// Fingerprint: role + length of each variable-length field, avoiding full text in keys.
 function msgFingerprint(msg: ChatMessage): string {
   const parts = [msg.role, (msg.content || '').length.toString()];
   if (msg.reasoning_content) parts.push(msg.reasoning_content.length.toString());
@@ -34,7 +44,7 @@ function msgFingerprint(msg: ChatMessage): string {
   return parts.join('|');
 }
 
-// ---- 缓存条目类型 ----
+// ---- Cache entry / result types ----
 
 export interface CacheEntry {
   tokens: number;
@@ -54,14 +64,14 @@ export interface CacheMissResult {
 
 export type CacheCheckResult = CacheHitResult | CacheMissResult;
 
-// ---- 缓存模拟 ----
-// 纯内存，LruMap 提供 O(1) LRU 淘汰。
+// ---- In-memory LRU cache (simulates disk cache metrics) ----
 
 const MAX_KEYS = 10_000;
 
 export class DiskCache {
   private map = new LruMap<string, CacheEntry>(MAX_KEYS);
 
+  /** Checks the longest prefix match. Touches the entry on hit to update LRU order. */
   getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
     const n = messages.length;
 
@@ -79,6 +89,7 @@ export class DiskCache {
     return { hit: false };
   }
 
+  /** Stores the full message list as a cache endpoint (no-op if key already exists). */
   persistEndpoints(messages: ChatMessage[]): void {
     const n = messages.length;
     const key = this.buildKey(messages, n);
@@ -89,6 +100,7 @@ export class DiskCache {
     }
   }
 
+  /** Builds `"<n>:<djb2(fingerprints)>"`. */
   private buildKey(messages: ChatMessage[], n: number): string {
     let combined = '';
     for (let i = 0; i < n; i++) {
