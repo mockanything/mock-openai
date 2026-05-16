@@ -12,20 +12,26 @@ const diskCache = new DiskCache();
 
 function buildUsage(
   inputTokens: number,
-  contentTokens: number,
-  reasoningTokens: number,
+  inputContentTokens: number,
+  inputReasoningTokens: number,
+  outputContentTokens: number,
+  outputReasoningTokens: number,
   cacheHitTokens: number,
   cacheMissTokens: number,
 ): ChatCompletionUsage {
-  const completionTokens = contentTokens + reasoningTokens;
+  const completionTokens = outputContentTokens + outputReasoningTokens;
   return {
     prompt_tokens: inputTokens,
     completion_tokens: completionTokens,
     total_tokens: inputTokens + completionTokens,
     prompt_cache_hit_tokens: cacheHitTokens,
     prompt_cache_miss_tokens: cacheMissTokens,
-    prompt_tokens_details: { cached_tokens: cacheHitTokens },
-    completion_tokens_details: { reasoning_tokens: reasoningTokens },
+    prompt_tokens_details: {
+      cached_tokens: cacheHitTokens,
+      reasoning_tokens: inputReasoningTokens,
+      content_tokens: inputContentTokens,
+    },
+    completion_tokens_details: { reasoning_tokens: outputReasoningTokens, content_tokens: outputContentTokens },
   };
 }
 
@@ -37,6 +43,8 @@ function handleStreaming(
   tools: Tool[] | undefined,
   tool_choice: ToolChoice | undefined,
   inputTokens: number,
+  inputContentTokens: number,
+  inputReasoningTokens: number,
   hitTokens: number,
   missTokens: number,
 ): void {
@@ -50,9 +58,9 @@ function handleStreaming(
   const sendChunk = (): void => {
     const result = generator.next();
     if (result.done) {
-      const contentTokens = countTokens(fullContent);
-      const reasoningTokens = countTokens(getReasoningContent(reasoning_effort));
-      const usage = buildUsage(inputTokens, contentTokens, reasoningTokens, hitTokens, missTokens);
+      const outputContentTokens = countTokens(fullContent);
+      const outputReasoningTokens = countTokens(getReasoningContent(reasoning_effort));
+      const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
       res.write(`data: ${JSON.stringify({
         id: generateId(),
         object: 'chat.completion.chunk',
@@ -64,7 +72,7 @@ function handleStreaming(
       res.write('data: [DONE]\n\n');
       res.end();
 
-      diskCache.persistEndPositions(messages, fullContent);
+      diskCache.persistEndpoints(messages);
       return;
     }
 
@@ -87,6 +95,8 @@ function handleNonStreaming(
   tools: Tool[] | undefined,
   tool_choice: ToolChoice | undefined,
   inputTokens: number,
+  inputContentTokens: number,
+  inputReasoningTokens: number,
   cacheHit: boolean,
   hitTokens: number,
   missTokens: number,
@@ -95,11 +105,11 @@ function handleNonStreaming(
   const content = response.choices[0]?.message?.content || '';
   const reasoningContent = response.choices[0]?.message?.reasoning_content || '';
 
-  diskCache.persistEndPositions(messages, content);
+  diskCache.persistEndpoints(messages);
 
-  const contentTokens = countTokens(content);
-  const reasoningTokens = countTokens(reasoningContent);
-  response.usage = buildUsage(inputTokens, contentTokens, reasoningTokens, hitTokens, missTokens);
+  const outputContentTokens = countTokens(content);
+  const outputReasoningTokens = countTokens(reasoningContent);
+  response.usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
   response.system_fingerprint = cacheHit ? 'fp_disk_cache' : undefined;
 
   res.json(response);
@@ -115,19 +125,25 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
 
   const cacheResult = diskCache.getHit(messages, tools);
   const inputTokens = countRequestTokens(messages, tools);
+  let inputContentTokens = 0;
+  let inputReasoningTokens = 0;
+  for (const msg of messages) {
+    inputContentTokens += countTokens(msg.content || '');
+    inputReasoningTokens += countTokens(msg.reasoning_content || '');
+  }
   if (cacheResult.hit) {
-    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} input=${inputTokens}tok HIT cached=${cacheResult.hitTokens}tok miss=${cacheResult.missTokens}tok`);
+    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok HIT hit_length=${cacheResult.hitLength} cached=${cacheResult.hitTokens}tok miss=${cacheResult.missTokens}tok`);
   } else {
-    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} input=${inputTokens}tok MISS`);
+    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok MISS`);
   }
 
   const hitTokens = cacheResult.hit ? cacheResult.hitTokens : 0;
   const missTokens = cacheResult.hit ? cacheResult.missTokens : inputTokens;
 
   if (stream) {
-    handleStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, hitTokens, missTokens);
+    handleStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, inputContentTokens, inputReasoningTokens, hitTokens, missTokens);
     return;
   }
 
-  handleNonStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, cacheResult.hit, hitTokens, missTokens);
+  handleNonStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, inputContentTokens, inputReasoningTokens, cacheResult.hit, hitTokens, missTokens);
 }

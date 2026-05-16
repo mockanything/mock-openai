@@ -45,8 +45,6 @@ function buildPrefixHash(messages: ChatMessage[], n: number): string {
 
 export interface CacheEntry {
   prefix: string;
-  content: string;
-  hitCount: number;
   createdAt: number;
   lastAccess: number;
   source: 'end_position';
@@ -72,27 +70,16 @@ export type CacheCheckResult = CacheHitResult | CacheMissResult;
 export class DiskCache {
   private map = new Map<string, CacheEntry>();
 
-  // Check for cache hit: full match on all N messages, then partial (longest first).
   getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
     const n = messages.length;
 
-    const fullKey = this.buildKey(messages, n);
-    if (this.map.has(fullKey)) {
-      const entry = this.map.get(fullKey)!;
-      entry.hitCount++;
-      entry.lastAccess = Date.now();
-      const allTokens = countRequestTokens(messages, tools);
-      return { hit: true, entry, hitLength: n, hitTokens: allTokens, missTokens: 0 };
-    }
-
-    for (let i = n - 1; i >= 1; i--) {
+    for (let i = n; i >= 1; i--) {
       const key = this.buildKey(messages, i);
       if (this.map.has(key)) {
         const entry = this.map.get(key)!;
-        entry.hitCount++;
         entry.lastAccess = Date.now();
-        const hitTokens = countRequestTokens(messages.slice(0, i));
-        const missTokens = countRequestTokens(messages.slice(i), tools);
+        const hitTokens = countRequestTokens(messages.slice(0, i), i === n ? tools : undefined);
+        const missTokens = i === n ? 0 : countRequestTokens(messages.slice(i), tools);
         return { hit: true, entry, hitLength: i, hitTokens, missTokens };
       }
     }
@@ -100,38 +87,17 @@ export class DiskCache {
     return { hit: false };
   }
 
-  // Persist two cache units after each request:
-  //   - input_end:  all N messages (request input)
-  //   - output_end: N messages + assistant response (request input + output)
-  persistEndPositions(messages: ChatMessage[], responseContent: string): void {
+  persistEndpoints(messages: ChatMessage[]): void {
     const n = messages.length;
-
-    const inputKey = this.buildKey(messages, n);
-    if (!this.map.has(inputKey)) {
-      this.map.set(inputKey, {
+    const key = this.buildKey(messages, n);
+    if (!this.map.has(key)) {
+      this.map.set(key, {
         prefix: messages.map(m => m.content || '').join('||'),
-        content: responseContent,
-        hitCount: 0,
         createdAt: Date.now(),
         lastAccess: Date.now(),
         source: 'end_position',
       });
-      serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist input_end key=${inputKey}`);
-    }
-
-    const responseMsg: ChatMessage = { role: 'assistant', content: responseContent };
-    const fullMessages = [...messages, responseMsg];
-    const fullKey = this.buildKey(fullMessages, n + 1);
-    if (!this.map.has(fullKey)) {
-      this.map.set(fullKey, {
-        prefix: [...messages.map(m => m.content || ''), responseContent].join('||'),
-        content: responseContent,
-        hitCount: 0,
-        createdAt: Date.now(),
-        lastAccess: Date.now(),
-        source: 'end_position',
-      });
-      serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist output_end key=${fullKey}`);
+      serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist key=${key}`);
     }
   }
 

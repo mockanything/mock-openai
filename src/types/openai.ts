@@ -59,9 +59,12 @@ export interface ChatCompletionUsage {
   prompt_cache_miss_tokens?: number;
   prompt_tokens_details?: {
     cached_tokens: number;
+    reasoning_tokens: number;
+    content_tokens: number;
   };
   completion_tokens_details?: {
     reasoning_tokens: number;
+    content_tokens: number;
   };
 }
 
