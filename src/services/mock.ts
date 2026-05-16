@@ -203,7 +203,7 @@ export function* createStreamingResponse(
       model,
       choices: [{
         index: 0,
-        delta: { reasoning_content: chunk },
+        delta: { role: 'assistant', reasoning_content: chunk },
         finish_reason: null,
       }],
     };
@@ -278,7 +278,7 @@ export function* createStreamingResponse(
       model,
       choices: [{
         index: 0,
-        delta: { content: chunk },
+        delta: { role: 'assistant', content: chunk },
         finish_reason: null,
       }],
     };
