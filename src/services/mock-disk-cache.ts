@@ -15,7 +15,7 @@ export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): num
 }
 
 // ---- 哈希函数 ----
-// 缓存 key 格式："N:<hex>"，N=消息数，hex=所有消息的 djb2 组合哈希。
+// 缓存 key 格式："N:<hex>"，N=消息数，hex = djb2(消息原文拼接)。
 
 function djb2(str: string): string {
   let hash = 5381;
@@ -26,20 +26,12 @@ function djb2(str: string): string {
   return (hash >>> 0).toString(16);
 }
 
-function hashMessage(msg: ChatMessage): string {
-  const parts = [msg.role, msg.content || ''];
-  if (msg.reasoning_content) parts.push(msg.reasoning_content);
-  if (msg.tool_calls) parts.push(JSON.stringify(msg.tool_calls));
-  return djb2(parts.join('|'));
-}
-
-function buildPrefixHash(messages: ChatMessage[], n: number): string {
-  let combined = '';
-  for (let i = 0; i < n; i++) {
-    if (i > 0) combined += '||';
-    combined += hashMessage(messages[i]);
-  }
-  return djb2(combined);
+// 将消息编码为角色+各字段长度，避免搬运实际内容字符串
+function msgFingerprint(msg: ChatMessage): string {
+  const parts = [msg.role, (msg.content || '').length.toString()];
+  if (msg.reasoning_content) parts.push(msg.reasoning_content.length.toString());
+  if (msg.tool_calls) parts.push(JSON.stringify(msg.tool_calls).length.toString());
+  return parts.join('|');
 }
 
 // ---- 缓存条目类型 ----
@@ -98,6 +90,11 @@ export class DiskCache {
   }
 
   private buildKey(messages: ChatMessage[], n: number): string {
-    return `${n}:${buildPrefixHash(messages, n)}`;
+    let combined = '';
+    for (let i = 0; i < n; i++) {
+      if (i > 0) combined += '||';
+      combined += msgFingerprint(messages[i]);
+    }
+    return `${n}:${djb2(combined)}`;
   }
 }
