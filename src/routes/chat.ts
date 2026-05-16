@@ -25,7 +25,7 @@ router.post('/v1/chat/completions', chatLimiter, bodySizeLimit, (req: Request<{}
     const sendChunk = (): void => {
       const result = generator.next();
       if (result.done) {
-        res.write(`data: [DONE]\n\n`);
+        res.write('data: [DONE]\n\n');
         res.end();
         return;
       }

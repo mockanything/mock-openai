@@ -7,9 +7,8 @@ npm run dev      # tsx watch src/index.ts (hot reload)
 npm run build    # tsc → dist/
 npm start        # node dist/index.js
 npx tsc --noEmit # Type check without building
+npm run lint      # eslint src --ext .ts (flat config in eslint.config.js)
 ```
-
-No test or lint infrastructure exists. `npm run lint` in package.json will fail (no ESLint config).
 
 ## Project Structure
 
@@ -21,6 +20,8 @@ No test or lint infrastructure exists. `npm run lint` in package.json will fail 
 - `src/types/openai.ts` — OpenAI-compatible request/response types
 - `src/middleware/rate-limit.ts` — Rate limiters for chat (per-model) and models endpoints
 - `src/middleware/body-size-limit.ts` — Flash 1MB body size check
+- `eslint.config.js` — ESLint flat config (v10, typescript-eslint recommended)
+- `.vscode/settings.json` — ESLint format-on-save via `source.fixAll.eslint`
 
 ## Key Quirks
 

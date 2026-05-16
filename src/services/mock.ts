@@ -63,13 +63,13 @@ function generateMockValue(schema: Record<string, unknown> | undefined): unknown
   if (!schema) return null;
   const type = schema.type as string | undefined;
   switch (type) {
-    case 'string': return 'mock_value';
-    case 'number':
-    case 'integer': return 42;
-    case 'boolean': return true;
-    case 'array': return [];
-    case 'object': return {};
-    default: return null;
+  case 'string': return 'mock_value';
+  case 'number':
+  case 'integer': return 42;
+  case 'boolean': return true;
+  case 'array': return [];
+  case 'object': return {};
+  default: return null;
   }
 }
 
