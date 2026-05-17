@@ -12,7 +12,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const cl = res.get('Content-Length') || '-';
-    accessLogger.info(`[${new Date().toISOString()}] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms ${cl}`);
+    accessLogger.info(`${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms ${cl}`);
   });
   next();
 });
@@ -25,5 +25,5 @@ app.use(modelsRouter);
 app.use(chatRouter);
 
 app.listen(config.port, () => {
-  serverLogger.info(`[${new Date().toISOString()}] [APP] Server started on http://localhost:${config.port}`);
+  serverLogger.info(`[APP] Server started on http://localhost:${config.port}`);
 });

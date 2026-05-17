@@ -6,18 +6,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const logDir = join(__dirname, '../../logs');
 const isProd = process.env.NODE_ENV === 'production';
 
+const ts = winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' });
+
+const logFmt = winston.format.printf(({ timestamp, message }) => `[${timestamp}] ${message}`);
+
 const consoleTransport = new winston.transports.Console({
-  format: winston.format.printf(({ message }) => message as string),
+  format: winston.format.combine(ts, logFmt),
 });
 
 const accessTransport = new winston.transports.File({
   filename: join(logDir, 'access.log'),
-  format: winston.format.printf(({ message }) => message as string),
+  format: winston.format.combine(ts, logFmt),
 });
 
 const serverTransport = new winston.transports.File({
   filename: join(logDir, 'server.log'),
-  format: winston.format.printf(({ message }) => message as string),
+  format: winston.format.combine(ts, logFmt),
 });
 
 export const accessLogger = winston.createLogger({

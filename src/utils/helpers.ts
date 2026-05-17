@@ -1,4 +1,4 @@
-import { ChatMessage } from '../types/openai.js';
+import { ChatMessage, Tool } from '../types/openai.js';
 
 export function generateId(): string {
   return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
@@ -41,11 +41,22 @@ export function countTokens(text: string): number {
   return Math.ceil(eng * 0.3 + chn * 0.6);
 }
 
-export function countMessageTokens(msg: ChatMessage): number {
-  let total = countTokens(msg.content || '');
-  total += countTokens(msg.reasoning_content || '');
-  if (msg.tool_calls) {
-    total += countTokens(JSON.stringify(msg.tool_calls));
+export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): { total: number; contentTokens: number; reasoningTokens: number } {
+  let total = 0;
+  let contentTokens = 0;
+  let reasoningTokens = 0;
+  for (const msg of messages) {
+    const ct = countTokens(msg.content || '');
+    const rt = countTokens(msg.reasoning_content || '');
+    contentTokens += ct;
+    reasoningTokens += rt;
+    total += ct + rt;
+    if (msg.tool_calls) {
+      total += countTokens(JSON.stringify(msg.tool_calls));
+    }
   }
-  return total;
+  if (tools) {
+    total += countTokens(JSON.stringify(tools));
+  }
+  return { total, contentTokens, reasoningTokens };
 }

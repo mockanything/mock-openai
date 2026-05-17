@@ -3,9 +3,9 @@ import { ChatCompletionRequest, ChatCompletionUsage, ChatMessage, Tool, ToolChoi
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent } from '../templates/index.js';
-import { generateId, countTokens } from '../utils/helpers.js';
+import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
 import { config } from '../config.js';
-import { DiskCache, countRequestTokens } from '../services/mock-disk-cache.js';
+import { DiskCache } from '../services/mock-disk-cache.js';
 import { serverLogger } from '../utils/logger.js';
 
 const diskCache = new DiskCache();
@@ -124,17 +124,11 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   }
 
   const cacheResult = diskCache.getHit(messages, tools);
-  const inputTokens = countRequestTokens(messages, tools);
-  let inputContentTokens = 0;
-  let inputReasoningTokens = 0;
-  for (const msg of messages) {
-    inputContentTokens += countTokens(msg.content || '');
-    inputReasoningTokens += countTokens(msg.reasoning_content || '');
-  }
+  const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
   if (cacheResult.hit) {
-    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok HIT hit_length=${cacheResult.hitLength} cached=${cacheResult.hitTokens}tok miss=${cacheResult.missTokens}tok`);
+    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok HIT hit_length=${cacheResult.hitLength} cached=${cacheResult.hitTokens}tok miss=${cacheResult.missTokens}tok`);
   } else {
-    serverLogger.info(`[${new Date().toISOString()}] [CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok MISS`);
+    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok MISS`);
   }
 
   const hitTokens = cacheResult.hit ? cacheResult.hitTokens : 0;

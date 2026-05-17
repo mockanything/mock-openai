@@ -27,6 +27,9 @@ export function getReasoningContent(reasoningEffort: string = 'medium'): string 
 }
 
 export function getResponseTemplate(messages: ChatMessage[]): string {
-  const userCount = messages.filter(m => m.role === 'user').length;
+  let userCount = 0;
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'user') userCount++;
+  }
   return responseTemplates[(userCount - 1 + responseTemplates.length) % responseTemplates.length];
 }

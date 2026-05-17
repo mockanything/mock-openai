@@ -11,19 +11,8 @@
 
 import { ChatMessage, Tool } from '../types/openai.js';
 import { serverLogger } from '../utils/logger.js';
-import { countTokens, countMessageTokens } from '../utils/helpers.js';
+import { countRequestTokens } from '../utils/helpers.js';
 import { LruMap } from '../utils/lru-map.js';
-
-export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): number {
-  let total = 0;
-  for (const msg of messages) {
-    total += countMessageTokens(msg);
-  }
-  if (tools) {
-    total += countTokens(JSON.stringify(tools));
-  }
-  return total;
-}
 
 // ---- djb2 hash (Bernstein) ----
 
@@ -75,13 +64,15 @@ export class DiskCache {
   getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
     const n = messages.length;
 
+    if (n <= 1) return { hit: false };
+
     for (let i = n; i >= 1; i--) {
       const key = this.buildKey(messages, i);
       if (this.map.has(key)) {
         this.map.touch(key);
         const entry = this.map.get(key)!;
-        const hitTokens = countRequestTokens(messages.slice(0, i), i === n ? tools : undefined);
-        const missTokens = i === n ? 0 : countRequestTokens(messages.slice(i), tools);
+        const hitTokens = countRequestTokens(messages.slice(0, i), i === n ? tools : undefined).total;
+        const missTokens = i === n ? 0 : countRequestTokens(messages.slice(i), tools).total;
         return { hit: true, entry, hitLength: i, hitTokens, missTokens };
       }
     }
@@ -92,11 +83,12 @@ export class DiskCache {
   /** Stores the full message list as a cache endpoint (no-op if key already exists). */
   persistEndpoints(messages: ChatMessage[]): void {
     const n = messages.length;
+    if (n <= 1) return;
     const key = this.buildKey(messages, n);
     if (!this.map.has(key)) {
-      const tokens = countRequestTokens(messages);
+      const tokens = countRequestTokens(messages).total;
       this.map.set(key, { tokens });
-      serverLogger.info(`[${new Date().toISOString()}] [CACHE] persist key=${key} tokens=${tokens}`);
+      serverLogger.info(`[CACHE] persist key=${key} tokens=${tokens}`);
     }
   }
 
