@@ -90,7 +90,7 @@ function handleStreaming(
     }
     res.write(buf);
     if (idx < chunks.length) {
-      setTimeout(drain, 0);
+      setTimeout(drain, 10);
     } else {
       done();
     }

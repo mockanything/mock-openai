@@ -49,3 +49,19 @@ npm run serve    # pm2 start ecosystem.config.cjs (production)
 - **Usage details**: `prompt_tokens_details` includes `cached_tokens`, `reasoning_tokens`, `content_tokens`. `completion_tokens_details` includes `reasoning_tokens`, `content_tokens`.
 - **Logging**: Winston with two files: `logs/access.log` (request path/status/duration/content-length) and `logs/server.log` (cache events, startup). Dev mode also writes to console.
 - **Env vars wired in code**: `PORT`, `DEFAULT_MODEL`, `RATE_LIMIT_FLASH`, `RATE_LIMIT_PRO`, `RATE_LIMIT_MODELS`. `DEFAULT_RESPONSE` and `STREAM_DELAY` are documented in README but **not implemented**.
+
+## Benchmarking
+
+```bash
+# 1. Build first (pm2 runs dist/index.js)
+npm run build
+# 2. Start server if not running (or restart to pick up new build)
+pm2 start ecosystem.config.cjs || pm2 restart ecosystem.config.cjs
+# 3. Bump rate limits in ecosystem.config.cjs (e.g. RATE_LIMIT_FLASH=100000)
+# 4. Restart pm2 to apply
+pm2 restart ecosystem.config.cjs
+# 5. Run the built-in bench script
+node scripts/bench.mjs
+# 6. Revert rate limit changes and restart
+pm2 restart ecosystem.config.cjs
+```
