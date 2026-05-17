@@ -13,7 +13,7 @@ export function splitIntoChunks(text: string): string[] {
   let i = 0;
   while (i < text.length) {
     const remaining = text.length - i;
-    const chunkSize = Math.min(Math.floor(Math.random() * 5) + 1, remaining);
+    const chunkSize = Math.min(Math.floor(Math.random() * 10) + 50, remaining);
     chunks.push(text.slice(i, i + chunkSize));
     i += chunkSize;
   }

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ChatCompletionRequest, ChatCompletionUsage, ChatMessage, Tool, ToolChoice } from '../types/openai.js';
+import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, Tool, ToolChoice } from '../types/openai.js';
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent } from '../templates/index.js';
@@ -55,36 +55,47 @@ function handleStreaming(
   const generator = createStreamingResponse(model, messages, reasoning_effort, tools, tool_choice);
   let fullContent = '';
 
-  const sendChunk = (): void => {
-    const result = generator.next();
-    if (result.done) {
-      const outputContentTokens = countTokens(fullContent);
-      const outputReasoningTokens = countTokens(getReasoningContent(reasoning_effort));
-      const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
-      res.write(`data: ${JSON.stringify({
-        id: generateId(),
-        object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [],
-        usage,
-      })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
-
-      diskCache.persistEndpoints(messages);
-      return;
-    }
-
-    const delta = result.value.choices[0]?.delta;
+  const chunks: ChatCompletionChunkResponse[] = [];
+  for (const chunk of generator) {
+    const delta = chunk.choices[0]?.delta;
     if (delta?.content) fullContent += delta.content;
+    chunks.push(chunk);
+  }
 
-    res.write(`data: ${JSON.stringify(result.value)}\n\n`);
+  const outputContentTokens = countTokens(fullContent);
+  const outputReasoningTokens = countTokens(getReasoningContent(reasoning_effort));
 
-    setTimeout(sendChunk, 0);
+  const done = (): void => {
+    const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
+    res.write(`data: ${JSON.stringify({
+      id: generateId(),
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [],
+      usage,
+    })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    diskCache.persistEndpoints(messages);
   };
 
-  sendChunk();
+  let idx = 0;
+  const BATCH = 100;
+  const drain = (): void => {
+    const end = Math.min(idx + BATCH, chunks.length);
+    let buf = '';
+    for (; idx < end; idx++) {
+      buf += `data: ${JSON.stringify(chunks[idx])}\n\n`;
+    }
+    res.write(buf);
+    if (idx < chunks.length) {
+      setTimeout(drain, 0);
+    } else {
+      done();
+    }
+  };
+  drain();
 }
 
 function handleNonStreaming(
