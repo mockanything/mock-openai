@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, Tool, ToolChoice, ToolCall } from '../types/openai.js';
-import { createNonStreamingResponse, createToolCalls, pickTools } from '../services/mock-non-stream.js';
+import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall } from '../types/openai.js';
+import { createNonStreamingResponse } from '../services/mock-non-stream.js';
+import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
 import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
