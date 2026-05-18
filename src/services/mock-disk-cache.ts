@@ -29,8 +29,12 @@ function djb2(str: string): string {
 function msgFingerprint(msg: ChatMessage): string {
   const parts = [msg.role, (msg.content || '').length.toString()];
   if (msg.reasoning_content) parts.push(msg.reasoning_content.length.toString());
-  if (msg.tool_calls) parts.push(JSON.stringify(msg.tool_calls).length.toString());
   return parts.join('|');
+}
+
+function toolsFingerprint(tools: Tool[] | undefined): string {
+  if (!tools || tools.length === 0) return '';
+  return tools.map(t => t.function.name).join(',');
 }
 
 // ---- Cache entry / result types ----
@@ -67,7 +71,7 @@ export class DiskCache {
     if (n <= 1) return { hit: false };
 
     for (let i = n; i >= 1; i--) {
-      const key = this.buildKey(messages, i);
+      const key = this.buildKey(messages, i, tools);
       if (this.map.has(key)) {
         this.map.touch(key);
         const entry = this.map.get(key)!;
@@ -81,24 +85,26 @@ export class DiskCache {
   }
 
   /** Stores the full message list as a cache endpoint (no-op if key already exists). */
-  persistEndpoints(messages: ChatMessage[]): void {
+  persistEndpoints(messages: ChatMessage[], tools?: Tool[]): void {
     const n = messages.length;
     if (n <= 1) return;
-    const key = this.buildKey(messages, n);
+    const key = this.buildKey(messages, n, tools);
     if (!this.map.has(key)) {
-      const tokens = countRequestTokens(messages).total;
+      const tokens = countRequestTokens(messages, tools).total;
       this.map.set(key, { tokens });
       serverLogger.info(`[CACHE] persist key=${key} tokens=${tokens}`);
     }
   }
 
   /** Builds `"<n>:<djb2(fingerprints)>"`. */
-  private buildKey(messages: ChatMessage[], n: number): string {
+  private buildKey(messages: ChatMessage[], n: number, tools?: Tool[]): string {
     let combined = '';
     for (let i = 0; i < n; i++) {
       if (i > 0) combined += '||';
       combined += msgFingerprint(messages[i]);
     }
+    const tfp = toolsFingerprint(tools);
+    if (tfp) combined += '||' + tfp;
     return `${n}:${djb2(combined)}`;
   }
 }

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall } from '../types/openai.js';
+import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall, Tool } from '../types/openai.js';
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
@@ -43,10 +43,11 @@ function handleNonStreaming(
   content: string,
   reasoning_content: string,
   tools: ToolCall[],
+  inputTools: Tool[],
   usage: ChatCompletionUsage,
 ): void {
   const response = createNonStreamingResponse(model, content, reasoning_content, tools);
-  diskCache.persistEndpoints(messages);
+  diskCache.persistEndpoints(messages, inputTools);
   response.usage = usage;
   res.json(response);
 }
@@ -59,6 +60,7 @@ function handleStreaming(
   content: string,
   reasoning_content: string,
   tools: ToolCall[],
+  inputTools: Tool[],
   usage: ChatCompletionUsage,
 ): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -83,7 +85,7 @@ function handleStreaming(
     })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
-    diskCache.persistEndpoints(messages);
+    diskCache.persistEndpoints(messages, inputTools);
   };
 
   let idx = 0;
@@ -128,7 +130,7 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
   const toolCalls = createToolCalls(tools!, toolIndices);
 
-  serverLogger.info(`[TOOLS] model=${model} tools=${toolCalls.map(t => t.function.name).join(',')}`);
+  serverLogger.info(`[TOOLS] model=${model} tools=${tools?.map(t => t.function.name).join(',')}`);
   if (toolCalls.length > 0) {
     serverLogger.info(`[TOOLS] model=${model} tool_calls=${toolCalls.map(item => item.function.name).join(',')} `);
   } else {
@@ -141,9 +143,9 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
   if (stream) {
-    handleStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, usage);
+    handleStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, tools || [], usage);
     return;
   }
 
-  handleNonStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, usage);
+  handleNonStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, tools || [], usage);
 }
