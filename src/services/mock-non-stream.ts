@@ -1,6 +1,5 @@
-import { ChatCompletionResponse, ChatMessage, Tool, ToolCall, ToolChoice } from '../types/openai.js';
+import { ChatCompletionResponse, Tool, ToolCall, ToolChoice } from '../types/openai.js';
 import { generateId, generateToolCallId, isFlashModel, isProModel } from '../utils/helpers.js';
-import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
 
 function generateMockValue(schema: Record<string, unknown> | undefined): unknown {
   if (!schema) return null;
@@ -80,16 +79,13 @@ export function createToolCalls(tools: Tool[], toolIndices: number[]): ToolCall[
 
 export function createNonStreamingResponse(
   model: string,
-  messages: ChatMessage[],
-  reasoningEffort: string = 'medium',
-  tools?: Tool[],
-  toolChoice?: ToolChoice
+  content: string,
+  reasoningContent: string,
+  toolCalls: ToolCall[],
 ): ChatCompletionResponse {
-  const chainOfThought = getReasoningContent(reasoningEffort);
-  const toolIndices = tools ? pickTools(tools, model, toolChoice) : [];
 
-  if (toolIndices.length > 0) {
-    const toolCalls = createToolCalls(tools!, toolIndices);
+
+  if (toolCalls.length > 0) {
     return {
       id: generateId(),
       object: 'chat.completion',
@@ -100,7 +96,7 @@ export function createNonStreamingResponse(
         message: {
           role: 'assistant',
           content: null,
-          reasoning_content: chainOfThought,
+          reasoning_content: reasoningContent,
           tool_calls: toolCalls,
         },
         finish_reason: 'tool_calls',
@@ -118,8 +114,8 @@ export function createNonStreamingResponse(
       index: 0,
       message: {
         role: 'assistant',
-        content: getResponseTemplate(messages),
-        reasoning_content: chainOfThought,
+        content: content,
+        reasoning_content: reasoningContent,
       },
       finish_reason: 'stop',
     }],

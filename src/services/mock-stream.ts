@@ -1,17 +1,13 @@
-import { ChatCompletionChunkResponse, ChatMessage, Tool, ToolChoice } from '../types/openai.js';
+import { ChatCompletionChunkResponse, ToolCall } from '../types/openai.js';
 import { generateId, splitIntoChunks } from '../utils/helpers.js';
-import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
-import { pickTools, createToolCalls } from './mock-non-stream.js';
 
 export function* createStreamingResponse(
   model: string,
-  messages: ChatMessage[],
-  reasoningEffort: string = 'medium',
-  tools?: Tool[],
-  toolChoice?: ToolChoice
+  content: string,
+  reasoningContent: string,
+  toolCalls: ToolCall[],
 ): Generator<ChatCompletionChunkResponse> {
-  const reasoningContent = getReasoningContent(reasoningEffort);
-  const toolIndices = tools ? pickTools(tools, model, toolChoice) : [];
+
 
   const reasonChunks = splitIntoChunks(reasoningContent);
   for (const chunk of reasonChunks) {
@@ -28,8 +24,7 @@ export function* createStreamingResponse(
     };
   }
 
-  if (toolIndices.length > 0) {
-    const toolCalls = createToolCalls(tools!, toolIndices);
+  if (toolCalls.length > 0) {
 
     for (let i = 0; i < toolCalls.length; i++) {
       const tc = toolCalls[i];
@@ -88,7 +83,7 @@ export function* createStreamingResponse(
     return;
   }
 
-  const contentChunks = splitIntoChunks(getResponseTemplate(messages));
+  const contentChunks = splitIntoChunks(content);
   for (const chunk of contentChunks) {
     yield {
       id: generateId(),

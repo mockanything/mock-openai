@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, Tool, ToolChoice } from '../types/openai.js';
-import { createNonStreamingResponse } from '../services/mock-non-stream.js';
+import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, Tool, ToolChoice, ToolCall } from '../types/openai.js';
+import { createNonStreamingResponse, createToolCalls, pickTools } from '../services/mock-non-stream.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
-import { getReasoningContent } from '../templates/index.js';
+import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
 import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
@@ -35,38 +35,43 @@ function buildUsage(
   };
 }
 
+function handleNonStreaming(
+  res: Response,
+  model: string,
+  messages: ChatMessage[],
+  content: string,
+  reasoning_content: string,
+  tools: ToolCall[],
+  usage: ChatCompletionUsage,
+): void {
+  const response = createNonStreamingResponse(model, content, reasoning_content, tools);
+  diskCache.persistEndpoints(messages);
+  response.usage = usage;
+  res.json(response);
+}
+
+
 function handleStreaming(
   res: Response,
   model: string,
   messages: ChatMessage[],
-  reasoning_effort: string,
-  tools: Tool[] | undefined,
-  tool_choice: ToolChoice | undefined,
-  inputTokens: number,
-  inputContentTokens: number,
-  inputReasoningTokens: number,
-  hitTokens: number,
-  missTokens: number,
+  content: string,
+  reasoning_content: string,
+  tools: ToolCall[],
+  usage: ChatCompletionUsage,
 ): void {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const generator = createStreamingResponse(model, messages, reasoning_effort, tools, tool_choice);
-  let fullContent = '';
+  const generator = createStreamingResponse(model, content, reasoning_content, tools);
 
   const chunks: ChatCompletionChunkResponse[] = [];
   for (const chunk of generator) {
-    const delta = chunk.choices[0]?.delta;
-    if (delta?.content) fullContent += delta.content;
     chunks.push(chunk);
   }
 
-  const outputContentTokens = countTokens(fullContent);
-  const outputReasoningTokens = countTokens(getReasoningContent(reasoning_effort));
-
   const done = (): void => {
-    const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
     res.write(`data: ${JSON.stringify({
       id: generateId(),
       object: 'chat.completion.chunk',
@@ -98,34 +103,6 @@ function handleStreaming(
   drain();
 }
 
-function handleNonStreaming(
-  res: Response,
-  model: string,
-  messages: ChatMessage[],
-  reasoning_effort: string,
-  tools: Tool[] | undefined,
-  tool_choice: ToolChoice | undefined,
-  inputTokens: number,
-  inputContentTokens: number,
-  inputReasoningTokens: number,
-  cacheHit: boolean,
-  hitTokens: number,
-  missTokens: number,
-): void {
-  const response = createNonStreamingResponse(model, messages, reasoning_effort, tools, tool_choice);
-  const content = response.choices[0]?.message?.content || '';
-  const reasoningContent = response.choices[0]?.message?.reasoning_content || '';
-
-  diskCache.persistEndpoints(messages);
-
-  const outputContentTokens = countTokens(content);
-  const outputReasoningTokens = countTokens(reasoningContent);
-  response.usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
-  response.system_fingerprint = cacheHit ? 'fp_disk_cache' : undefined;
-
-  res.json(response);
-}
-
 export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): void {
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'medium', tools, tool_choice } = req.body;
 
@@ -145,10 +122,20 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const hitTokens = cacheResult.hit ? cacheResult.hitTokens : 0;
   const missTokens = cacheResult.hit ? cacheResult.missTokens : inputTokens;
 
+  const outputContent = getResponseTemplate(messages);
+  const outputReasoningContent = getReasoningContent(reasoning_effort);
+  const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
+  const toolCalls = createToolCalls(tools!, toolIndices);
+
+  const outputContentTokens = countTokens(outputContent);
+  const outputReasoningTokens = countTokens(getReasoningContent(outputReasoningContent));
+
+  const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
+
   if (stream) {
-    handleStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, inputContentTokens, inputReasoningTokens, hitTokens, missTokens);
+    handleStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, usage);
     return;
   }
 
-  handleNonStreaming(res, model, messages, reasoning_effort, tools, tool_choice, inputTokens, inputContentTokens, inputReasoningTokens, cacheResult.hit, hitTokens, missTokens);
+  handleNonStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, usage);
 }
