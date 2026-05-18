@@ -14,12 +14,7 @@ const models = modelList.map((id, index) => ({
   id,
   object: 'model',
   created: 1704067200 + index * 86400,
-  owned_by: id.includes('gpt') ? 'openai' :
-    id.includes('claude') ? 'anthropic' :
-      id.includes('gemini') ? 'google' :
-        id.includes('deepseek') ? 'deepseek' :
-          id.includes('glm') ? 'zhipu' :
-            id.includes('kimi') ? 'moonshot' : 'unknown',
+  owned_by: 'unknown',
 }));
 
 export function handleListModels(_req: Request, res: Response): void {

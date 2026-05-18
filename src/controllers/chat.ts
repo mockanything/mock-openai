@@ -39,15 +39,12 @@ function buildUsage(
 function handleNonStreaming(
   res: Response,
   model: string,
-  messages: ChatMessage[],
   content: string,
   reasoning_content: string,
-  tools: ToolCall[],
-  inputTools: Tool[],
+  toolCalls: ToolCall[],
   usage: ChatCompletionUsage,
 ): void {
-  const response = createNonStreamingResponse(model, content, reasoning_content, tools);
-  diskCache.persistEndpoints(messages, inputTools);
+  const response = createNonStreamingResponse(model, content, reasoning_content, toolCalls);
   response.usage = usage;
   res.json(response);
 }
@@ -56,18 +53,16 @@ function handleNonStreaming(
 function handleStreaming(
   res: Response,
   model: string,
-  messages: ChatMessage[],
   content: string,
   reasoning_content: string,
-  tools: ToolCall[],
-  inputTools: Tool[],
+  toolCalls: ToolCall[],
   usage: ChatCompletionUsage,
 ): void {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const generator = createStreamingResponse(model, content, reasoning_content, tools);
+  const generator = createStreamingResponse(model, content, reasoning_content, toolCalls);
 
   const chunks: ChatCompletionChunkResponse[] = [];
   for (const chunk of generator) {
@@ -85,7 +80,6 @@ function handleStreaming(
     })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
-    diskCache.persistEndpoints(messages, inputTools);
   };
 
   let idx = 0;
@@ -114,19 +108,19 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
     return;
   }
 
-  const cacheResult = diskCache.getHit(messages, tools);
+  // 请求统计
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
-  if (cacheResult.hit) {
-    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} hit_length=${cacheResult.hitLength} input=${inputTokens} cached=${cacheResult.hitTokens} miss=${cacheResult.missTokens}`);
+
+  // 缓存计算
+  const { hit, hitTokens = 0, missTokens = 0 } = diskCache.getHit(messages, tools);
+  diskCache.persistEndpoints(messages, tools);
+  if (hit) {
+    serverLogger.info(`[CACHE] HIT model=${model} msg_len=${messages.length} hit_len=${hitTokens} input=${inputTokens} cached=${hitTokens} miss=${missTokens}`);
   } else {
-    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} hit_length=0 input=${inputTokens} MISS`);
+    serverLogger.info(`[CACHE] MISS model=${model} msg_len=${messages.length} hit_len=0 input=${inputTokens} `);
   }
 
-  const hitTokens = cacheResult.hit ? cacheResult.hitTokens : 0;
-  const missTokens = cacheResult.hit ? cacheResult.missTokens : inputTokens;
-
-  const outputContent = getResponseTemplate(messages);
-  const outputReasoningContent = getReasoningContent(reasoning_effort);
+  // 工具调用
   const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
   const toolCalls = createToolCalls(tools!, toolIndices);
 
@@ -137,15 +131,19 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
     serverLogger.info(`[TOOLS] model=${model} tool_calls=none`);
   }
 
-  const outputContentTokens = countTokens(outputContent);
-  const outputReasoningTokens = countTokens(getReasoningContent(outputReasoningContent));
+  // 结果生成
+  const outputContent = getResponseTemplate(messages);
+  const outputReasoning = getReasoningContent(reasoning_effort);
 
+  // 响应统计
+  const outputContentTokens = countTokens(outputContent);
+  const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
   if (stream) {
-    handleStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, tools || [], usage);
+    handleStreaming(res, model, outputContent, outputReasoning, toolCalls, usage);
     return;
   }
 
-  handleNonStreaming(res, model, messages, outputContent, outputReasoningContent, toolCalls, tools || [], usage);
+  handleNonStreaming(res, model, outputContent, outputReasoning, toolCalls,  usage);
 }
