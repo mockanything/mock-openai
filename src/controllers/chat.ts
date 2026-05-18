@@ -105,7 +105,7 @@ function handleStreaming(
 }
 
 export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): void {
-  const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'medium', tools, tool_choice } = req.body;
+  const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'low', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages is required' });
@@ -115,9 +115,9 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const cacheResult = diskCache.getHit(messages, tools);
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
   if (cacheResult.hit) {
-    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok HIT hit_length=${cacheResult.hitLength} cached=${cacheResult.hitTokens}tok miss=${cacheResult.missTokens}tok`);
+    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} hit_length=${cacheResult.hitLength} input=${inputTokens} cached=${cacheResult.hitTokens} miss=${cacheResult.missTokens}`);
   } else {
-    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} input=${inputTokens}tok MISS`);
+    serverLogger.info(`[CACHE] model=${model} msg_length=${messages.length} hit_length=0 input=${inputTokens} MISS`);
   }
 
   const hitTokens = cacheResult.hit ? cacheResult.hitTokens : 0;
@@ -127,6 +127,13 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const outputReasoningContent = getReasoningContent(reasoning_effort);
   const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
   const toolCalls = createToolCalls(tools!, toolIndices);
+
+  serverLogger.info(`[TOOLS] model=${model} tools=${toolCalls.map(t => t.function.name).join(',')}`);
+  if (toolCalls.length > 0) {
+    serverLogger.info(`[TOOLS] model=${model} tool_calls=${toolCalls.map(item => item.function.name).join(',')} `);
+  } else {
+    serverLogger.info(`[TOOLS] model=${model} tool_calls=none`);
+  }
 
   const outputContentTokens = countTokens(outputContent);
   const outputReasoningTokens = countTokens(getReasoningContent(outputReasoningContent));
