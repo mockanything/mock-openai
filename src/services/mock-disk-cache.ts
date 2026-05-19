@@ -15,7 +15,6 @@ import { countRequestTokens } from '../utils/helpers.js';
 import { LruMap } from '../utils/lru-map.js';
 
 // ---- djb2 hash (Bernstein) ----
-
 function djb2(str: string): string {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
@@ -27,9 +26,11 @@ function djb2(str: string): string {
 
 // Fingerprint: role + length of each variable-length field, avoiding full text in keys.
 function msgFingerprint(msg: ChatMessage): string {
-  const parts = [msg.role, (msg.content || '').length.toString()];
-  if (msg.reasoning_content) parts.push(msg.reasoning_content.length.toString());
-  return parts.join('|');
+  return [
+    msg.role,
+    (msg.content || '').length.toString(),
+    (msg.reasoning_content || '').length.toString()
+  ].join(',');
 }
 
 function toolsFingerprint(tools: Tool[] | undefined): string {
@@ -38,50 +39,41 @@ function toolsFingerprint(tools: Tool[] | undefined): string {
 }
 
 // ---- Cache entry / result types ----
-
 export interface CacheEntry {
   tokens: number;
 }
 
 export interface CacheHitResult {
-  hit: true;
-  entry: CacheEntry;
+  hit: boolean;
   hitLength: number;
   hitTokens: number;
   missTokens: number;
 }
 
-export interface CacheMissResult {
-  hit: false;
-}
-
-export type CacheCheckResult = CacheHitResult | CacheMissResult;
-
 // ---- In-memory LRU cache (simulates disk cache metrics) ----
-
 const MAX_KEYS = 10_000;
 
 export class DiskCache {
   private map = new LruMap<string, CacheEntry>(MAX_KEYS);
 
   /** Checks the longest prefix match. Touches the entry on hit to update LRU order. */
-  getHit(messages: ChatMessage[], tools?: Tool[]): CacheCheckResult {
+  getHit(messages: ChatMessage[], tools?: Tool[]): CacheHitResult {
     const n = messages.length;
 
-    if (n <= 1) return { hit: false };
+    const { total: totalTokens } = countRequestTokens(messages, tools);
+    if (n <= 1) return { hit: false, hitLength: 0, hitTokens: 0, missTokens: totalTokens  };
 
     for (let i = n; i >= 1; i--) {
       const key = this.buildKey(messages, i, tools);
       if (this.map.has(key)) {
         this.map.touch(key);
-        const entry = this.map.get(key)!;
-        const hitTokens = countRequestTokens(messages.slice(0, i), i === n ? tools : undefined).total;
-        const missTokens = i === n ? 0 : countRequestTokens(messages.slice(i), tools).total;
-        return { hit: true, entry, hitLength: i, hitTokens, missTokens };
+        const { total: hitTokens } = countRequestTokens(messages.slice(0, i), tools);
+        const missTokens = totalTokens - hitTokens;
+        return { hit: true, hitLength: i, hitTokens, missTokens };
       }
     }
 
-    return { hit: false };
+    return { hit: false, hitLength: 0, hitTokens: 0, missTokens: totalTokens  };
   }
 
   /** Stores the full message list as a cache endpoint (no-op if key already exists). */
@@ -90,7 +82,7 @@ export class DiskCache {
     if (n <= 1) return;
     const key = this.buildKey(messages, n, tools);
     if (!this.map.has(key)) {
-      const tokens = countRequestTokens(messages, tools).total;
+      const { total: tokens } = countRequestTokens(messages, tools);
       this.map.set(key, { tokens });
       serverLogger.info(`[CACHE] persist key=${key} tokens=${tokens}`);
     }
@@ -99,12 +91,14 @@ export class DiskCache {
   /** Builds `"<n>:<djb2(fingerprints)>"`. */
   private buildKey(messages: ChatMessage[], n: number, tools?: Tool[]): string {
     let combined = '';
+    const tfp = toolsFingerprint(tools);
+    if (tfp) {
+      combined += ',' + tfp;
+    }
     for (let i = 0; i < n; i++) {
-      if (i > 0) combined += '||';
+      if (i > 0) combined += ',';
       combined += msgFingerprint(messages[i]);
     }
-    const tfp = toolsFingerprint(tools);
-    if (tfp) combined += '||' + tfp;
     return `${n}:${djb2(combined)}`;
   }
 }

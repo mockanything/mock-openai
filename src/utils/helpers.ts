@@ -41,8 +41,7 @@ export function countTokens(text: string): number {
   return Math.ceil(eng * 0.3 + chn * 0.6);
 }
 
-export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): { total: number; contentTokens: number; reasoningTokens: number } {
-  let total = 0;
+export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]) {
   let contentTokens = 0;
   let reasoningTokens = 0;
   for (const msg of messages) {
@@ -50,13 +49,13 @@ export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]): { t
     const rt = countTokens(msg.reasoning_content || '');
     contentTokens += ct;
     reasoningTokens += rt;
-    total += ct + rt;
     if (msg.tool_calls) {
-      total += countTokens(JSON.stringify(msg.tool_calls));
+      contentTokens += countTokens(JSON.stringify(msg.tool_calls));
     }
   }
   if (tools) {
-    total += countTokens(JSON.stringify(tools));
+    contentTokens = countTokens(JSON.stringify(tools));
   }
+  const total = contentTokens + reasoningTokens;
   return { total, contentTokens, reasoningTokens };
 }
