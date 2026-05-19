@@ -18,3 +18,6 @@ watermelon-v1-flash
 watermelon-v1-pro
 yuzu-v1-flash
 yuzu-v1-pro
+text-embedding-3-small
+text-embedding-3-large
+text-embedding-ada-002

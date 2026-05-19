@@ -108,3 +108,33 @@ export interface ChatCompletionChunkResponse {
   model: string;
   choices: ChatCompletionChunkChoice[];
 }
+
+// Embeddings types
+
+export type EmbeddingInput = string | string[];
+
+export interface EmbeddingRequest {
+  model: string;
+  input: EmbeddingInput;
+  user?: string;
+  encoding_format?: 'float' | 'base64';
+  dimensions?: number;
+}
+
+export interface EmbeddingData {
+  object: 'embedding';
+  index: number;
+  embedding: number[];
+}
+
+export interface EmbeddingUsage {
+  prompt_tokens: number;
+  total_tokens: number;
+}
+
+export interface EmbeddingResponse {
+  object: 'list';
+  data: EmbeddingData[];
+  model: string;
+  usage: EmbeddingUsage;
+}
