@@ -135,6 +135,9 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const outputContent = getResponseTemplate(messages);
   const outputReasoning = getReasoningContent(reasoning_effort);
 
+  // 输出缓存落盘（输入消息 + 模型输出作为一个缓存单元）
+  diskCache.persistOutputCache(messages, outputContent, outputReasoning, toolCalls, tools);
+
   // 响应统计
   const outputContentTokens = countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
