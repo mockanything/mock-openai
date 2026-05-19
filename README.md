@@ -1,14 +1,18 @@
 # Mock OpenAI
 
+> [中文版](./README.zh.md)
+
 Mock OpenAI API service for development and testing.
 
 ## Features
 
 - `/v1/chat/completions` — Chat completions endpoint
 - `/v1/models` — List available models
+- `/v1/embeddings` — Embeddings endpoint
 - Streaming support (SSE)
 - Tool / function calling simulation
 - Chain-of-thought (reasoning_effort)
+- Prompt caching simulation (input + output cache)
 - Per-model rate limiting (flash 20/min, pro 60/min)
 - Request body size limits (flash 1MB, pro 10MB)
 
@@ -24,7 +28,7 @@ npm run dev
 | Variable | Default | Description |
 |----------|---------|-------------|
 | PORT | 3000 | Server port |
-| DEFAULT_MODEL | apple-v1-flash | Default model |
+| DEFAULT_MODEL | apple-v1-flash | Default chat model |
 | RATE_LIMIT_FLASH | 20 | Flash model requests per minute |
 | RATE_LIMIT_PRO | 60 | Pro model requests per minute |
 | RATE_LIMIT_MODELS | 100 | Models endpoint requests per minute |
@@ -137,3 +141,5 @@ curl http://localhost:3000/health
 - `npm run dev` — Development mode with hot reload
 - `npm run build` — Build TypeScript
 - `npm start` — Run production build
+- `npm run lint` — ESLint check
+- `npm run serve` — PM2 production deployment
