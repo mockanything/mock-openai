@@ -94,6 +94,38 @@ curl -X POST http://localhost:3000/v1/chat/completions \
   }'
 ```
 
+### Embeddings
+
+```bash
+curl -X POST http://localhost:3000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Hello, world!",
+    "model": "text-embedding-3-small"
+  }'
+```
+
+```bash
+# Multiple inputs
+curl -X POST http://localhost:3000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": ["Hello", "World"],
+    "model": "text-embedding-3-large"
+  }'
+```
+
+```bash
+# Custom dimensions
+curl -X POST http://localhost:3000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Hello",
+    "model": "text-embedding-3-small",
+    "dimensions": 256
+  }'
+```
+
 ### Health Check
 
 ```bash
