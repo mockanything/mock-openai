@@ -1,8 +1,8 @@
 import { countTokens } from '../utils/helpers.js';
 
 /**
- * Simple seeded pseudo-random number generator (mulberry32).
- * Produces deterministic results for the same seed.
+ * 基于种子的伪随机数生成器 (mulberry32)。
+ * 相同的种子产生相同的随机序列。
  */
 function mulberry32(seed: number): () => number {
   return () => {
@@ -15,15 +15,15 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
- * Generate a deterministic embedding vector for a given input text.
- * Same text always produces the same vector.
+ * 为指定文本生成确定性 embedding 向量。
+ * 相同输入始终产生相同的向量。
  *
- * @param text - Input text to embed
- * @param dimensions - Number of embedding dimensions (default 1536)
- * @returns Normalized embedding vector
+ * @param text - 输入文本
+ * @param dimensions - embedding 向量维度（默认 1536）
+ * @returns L2 归一化的 embedding 向量
  */
 export function generateEmbedding(text: string, dimensions: number = 1536): number[] {
-  // Create a seed from the input text
+  // 从输入文本创建种子
   let seed = 0;
   for (let i = 0; i < text.length; i++) {
     seed = (seed * 31 + text.charCodeAt(i)) | 0;
@@ -32,10 +32,10 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
   const rng = mulberry32(seed);
   const vector: number[] = [];
 
-  // Generate random values and normalize to unit length
+  // 生成随机值并归一化到单位长度
   let sumSq = 0;
   for (let i = 0; i < dimensions; i++) {
-    // Box-Muller transform for normal distribution
+    // Box-Muller 变换：将均匀分布转换为正态分布
     const u1 = rng();
     const u2 = rng();
     const z = Math.sqrt(-2.0 * Math.log(u1 + 0.0001)) * Math.cos(2.0 * Math.PI * u2);
@@ -43,7 +43,7 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
     sumSq += z * z;
   }
 
-  // L2 normalize
+  // L2 归一化
   const norm = Math.sqrt(sumSq);
   for (let i = 0; i < dimensions; i++) {
     vector[i] = vector[i] / norm;
@@ -53,15 +53,15 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
 }
 
 /**
- * Get the default embedding dimensions for a given model name.
+ * 根据模型名称返回默认的 embedding 维度。
  */
 export function getEmbeddingDimensions(model: string): number {
   if (model.includes('3-large')) return 3072;
-  return 1536; // default for text-embedding-3-small, text-embedding-ada-002, etc.
+  return 1536; // text-embedding-3-small / text-embedding-ada-002 等默认值
 }
 
 /**
- * Calculate prompt tokens for embeddings input.
+ * 计算 embedding 输入的 prompt token 数。
  */
 export function countEmbeddingTokens(input: string | string[]): number {
   if (Array.isArray(input)) {
