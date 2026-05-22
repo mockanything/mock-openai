@@ -100,7 +100,14 @@ function handleStreaming(
   drain();
 }
 
-export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): void {
+function simulatePrefill(inputTokens: number, cacheHit: boolean): Promise<void> {
+  const base = cacheHit ? 5 : 50;
+  const msPerToken = cacheHit ? 0.005 : 0.05;
+  const delay = base + inputTokens * msPerToken;
+  return new Promise(resolve => setTimeout(resolve, delay));
+}
+
+export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): Promise<void> {
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'low', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -142,6 +149,8 @@ export function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>
   const outputContentTokens = countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
+
+  await simulatePrefill(inputTokens, hit);
 
   if (stream) {
     handleStreaming(res, model, outputContent, outputReasoning, toolCalls, usage);
