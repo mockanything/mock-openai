@@ -101,8 +101,9 @@ function handleStreaming(
 }
 
 function simulatePrefill(inputTokens: number, cacheHit: boolean): Promise<void> {
-  const msPerToken = cacheHit ? 0.01 : 0.1;
-  const delay = 50 + inputTokens * msPerToken;
+  const base = cacheHit ? 5 : 50;
+  const msPerToken = cacheHit ? 0.005 : 0.05;
+  const delay = base + inputTokens * msPerToken;
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
