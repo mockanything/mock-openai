@@ -118,16 +118,7 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   // 请求统计
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
 
-  // 缓存计算
-  const { hit, hitTokens = 0, missTokens = 0 } = diskCache.getHit(messages, tools);
-  diskCache.persistEndpoints(messages, tools);
-  if (hit) {
-    serverLogger.info(`[CACHE] HIT model=${model} msg_len=${messages.length} hit_len=${hitTokens} input=${inputTokens} cached=${hitTokens} miss=${missTokens}`);
-  } else {
-    serverLogger.info(`[CACHE] MISS model=${model} msg_len=${messages.length} hit_len=0 input=${inputTokens} `);
-  }
-
-  // 工具调用
+  // 工具调用（先于缓存检查，决定是否有工具调用）
   const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
   const toolCalls = createToolCalls(tools!, toolIndices);
 
@@ -138,15 +129,25 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
     serverLogger.info(`[TOOLS] model=${model} tool_calls=none`);
   }
 
+  // 缓存计算
+  const { hit, hitTokens = 0, missTokens = 0 } = diskCache.getHit(messages, tools);
+  diskCache.persistEndpoints(messages, tools);
+  if (hit) {
+    serverLogger.info(`[CACHE] HIT model=${model} msg_len=${messages.length} hit_len=${hitTokens} input=${inputTokens} cached=${hitTokens} miss=${missTokens}`);
+  } else {
+    serverLogger.info(`[CACHE] MISS model=${model} msg_len=${messages.length} hit_len=0 input=${inputTokens} `);
+  }
+
   // 结果生成
-  const outputContent = getResponseTemplate(messages);
+  const hasToolCalls = toolCalls.length > 0;
+  const outputContent = hasToolCalls ? '' : getResponseTemplate(messages);
   const outputReasoning = getReasoningContent(reasoning_effort);
 
   // 输出缓存落盘（输入消息 + 模型输出作为一个缓存单元）
   diskCache.persistOutputCache(messages, outputContent, outputReasoning, toolCalls, tools);
 
   // 响应统计
-  const outputContentTokens = countTokens(outputContent);
+  const outputContentTokens = hasToolCalls ? 0 : countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
