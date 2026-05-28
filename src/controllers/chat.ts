@@ -7,6 +7,7 @@ import { getReasoningContent, getResponseTemplate } from '../templates/index.js'
 import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
+import { recordBilling, BillingRecord } from '../services/billing.js';
 import { serverLogger } from '../utils/logger.js';
 
 const diskCache = new DiskCache();
@@ -150,6 +151,21 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const outputContentTokens = hasToolCalls ? 0 : countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
+
+  const apiKey = (req.headers['x-api-key'] as string) || 'default';
+  const billingRecord: BillingRecord = {
+    api_key: apiKey,
+    model,
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || 0,
+    prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens || 0,
+    reasoning_tokens: outputReasoningTokens,
+    content_tokens: outputContentTokens,
+    stream,
+  };
+  recordBilling(billingRecord);
 
   await simulatePrefill(inputTokens, hit);
 
