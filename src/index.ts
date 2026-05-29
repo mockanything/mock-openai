@@ -33,7 +33,8 @@ app.use(chatRouter);
 app.use(embeddingsRouter);
 app.use(billingRouter);
 
-initBilling();
-app.listen(config.port, () => {
-  serverLogger.info(`[APP] Server started on http://localhost:${config.port}`);
+initBilling().then(() => {
+  app.listen(config.port, () => {
+    serverLogger.info(`[APP] Server started on http://localhost:${config.port}`);
+  });
 });

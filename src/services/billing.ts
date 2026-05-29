@@ -1,7 +1,7 @@
-import Database from 'better-sqlite3';
+import initSqlJs, { Database as SqlJsDatabase, SqlJsStatic, Statement } from 'sql.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { mkdirSync, existsSync } from 'fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 
 const getDirname = () => {
   if (typeof __dirname !== 'undefined') return __dirname;
@@ -40,16 +40,24 @@ export interface BillingSummary {
   }>;
 }
 
-let db: Database.Database;
+let db: SqlJsDatabase;
+let SQL: SqlJsStatic;
 
-export function initBilling(): void {
-  const dataDir = join(getDirname(), '../../data');
+export async function initBilling(): Promise<void> {
+  const dataDir = dirname(DB_PATH);
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
   }
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.exec(`
+
+  SQL = await initSqlJs();
+
+  let buffer: Buffer | undefined;
+  try {
+    buffer = readFileSync(DB_PATH);
+  } catch {}
+
+  db = new SQL.Database(buffer);
+  db.run(`
     CREATE TABLE IF NOT EXISTS billing_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       api_key TEXT NOT NULL,
@@ -65,23 +73,65 @@ export function initBilling(): void {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_billing_api_key ON billing_logs(api_key)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_billing_created_at ON billing_logs(created_at)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_billing_api_key ON billing_logs(api_key)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_billing_created_at ON billing_logs(created_at)');
+  persist();
+}
+
+function persist(): void {
+  const data = db.export();
+  writeFileSync(DB_PATH, Buffer.from(data));
+}
+
+type SqlParam = number | string | null;
+
+function queryAll<T>(sql: string, params: SqlParam[] = []): T[] {
+  const stmt: Statement = db.prepare(sql);
+  stmt.bind(params);
+  const rows: T[] = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject() as T);
+  }
+  stmt.free();
+  return rows;
+}
+
+function queryOne<T>(sql: string, params: SqlParam[] = []): T | null {
+  const stmt: Statement = db.prepare(sql);
+  stmt.bind(params);
+  if (stmt.step()) {
+    const row = stmt.getAsObject() as T;
+    stmt.free();
+    return row;
+  }
+  stmt.free();
+  return null;
 }
 
 export function recordBilling(record: BillingRecord): void {
-  const stmt = db.prepare(`
-    INSERT INTO billing_logs (api_key, model, prompt_tokens, completion_tokens, total_tokens,
+  db.run(
+    `INSERT INTO billing_logs (api_key, model, prompt_tokens, completion_tokens, total_tokens,
       prompt_cache_hit_tokens, prompt_cache_miss_tokens, reasoning_tokens, content_tokens, stream)
-    VALUES (@api_key, @model, @prompt_tokens, @completion_tokens, @total_tokens,
-      @prompt_cache_hit_tokens, @prompt_cache_miss_tokens, @reasoning_tokens, @content_tokens, @stream)
-  `);
-  stmt.run({ ...record, stream: record.stream ? 1 : 0 });
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      record.api_key,
+      record.model,
+      record.prompt_tokens,
+      record.completion_tokens,
+      record.total_tokens,
+      record.prompt_cache_hit_tokens,
+      record.prompt_cache_miss_tokens,
+      record.reasoning_tokens,
+      record.content_tokens,
+      record.stream ? 1 : 0,
+    ],
+  );
+  persist();
 }
 
 export function queryBilling(apiKey: string, startDate?: string, endDate?: string): BillingSummary {
   let where = 'WHERE api_key = ?';
-  const params: unknown[] = [apiKey];
+  const params: SqlParam[] = [apiKey];
 
   if (startDate) {
     where += ' AND created_at >= ?';
@@ -92,17 +142,25 @@ export function queryBilling(apiKey: string, startDate?: string, endDate?: strin
     params.push(endDate);
   }
 
-  const summaryRow = db.prepare(`
-    SELECT
+  const summaryRow = queryOne<{
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    total_tokens: number;
+    total_requests: number;
+  }>(
+    `SELECT
       COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
       COALESCE(SUM(completion_tokens), 0) as total_completion_tokens,
       COALESCE(SUM(total_tokens), 0) as total_tokens,
       COUNT(*) as total_requests
-    FROM billing_logs ${where}
-  `).get(...params) as { total_prompt_tokens: number; total_completion_tokens: number; total_tokens: number; total_requests: number };
+    FROM billing_logs ${where}`,
+    params,
+  );
 
-  const details = db.prepare(`
-    SELECT
+  const details = queryAll<{
+    model: string; requests: number; prompt_tokens: number; completion_tokens: number; total_tokens: number;
+  }>(
+    `SELECT
       model,
       COUNT(*) as requests,
       SUM(prompt_tokens) as prompt_tokens,
@@ -110,17 +168,16 @@ export function queryBilling(apiKey: string, startDate?: string, endDate?: strin
       SUM(total_tokens) as total_tokens
     FROM billing_logs ${where}
     GROUP BY model
-    ORDER BY total_tokens DESC
-  `).all(...params) as Array<{
-    model: string; requests: number; prompt_tokens: number; completion_tokens: number; total_tokens: number;
-  }>;
+    ORDER BY total_tokens DESC`,
+    params,
+  );
 
   return {
     api_key: apiKey,
-    total_prompt_tokens: summaryRow.total_prompt_tokens,
-    total_completion_tokens: summaryRow.total_completion_tokens,
-    total_tokens: summaryRow.total_tokens,
-    total_requests: summaryRow.total_requests,
+    total_prompt_tokens: summaryRow?.total_prompt_tokens ?? 0,
+    total_completion_tokens: summaryRow?.total_completion_tokens ?? 0,
+    total_tokens: summaryRow?.total_tokens ?? 0,
+    total_requests: summaryRow?.total_requests ?? 0,
     start_date: startDate || 'all',
     end_date: endDate || 'all',
     details,
