@@ -54,7 +54,7 @@ export function countRequestTokens(messages: ChatMessage[], tools?: Tool[]) {
     }
   }
   if (tools) {
-    contentTokens = countTokens(JSON.stringify(tools));
+    contentTokens += countTokens(JSON.stringify(tools));
   }
   const total = contentTokens + reasoningTokens;
   return { total, contentTokens, reasoningTokens };

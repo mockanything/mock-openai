@@ -1,15 +1,58 @@
 import { Tool, ToolCall, ToolChoice } from '../types/openai.js';
 import { generateToolCallId, isFlashModel, isProModel } from '../utils/helpers.js';
 
-function generateMockValue(schema: Record<string, unknown> | undefined): unknown {
+function generateSmartMockValue(
+  toolName: string,
+  paramName: string,
+  schema: Record<string, unknown> | undefined,
+): unknown {
   if (!schema) return null;
   const type = schema.type as string | undefined;
+  const name = paramName.toLowerCase();
+  const tool = toolName.toLowerCase();
+
   switch (type) {
-  case 'string': return 'mock_value';
+  case 'string': {
+    if (name.includes('path')) return tool.includes('write') ? '/path/to/output' : 'src';
+    if (name.includes('file') || name.includes('name')) return 'README.md';
+    if (name.includes('url') || name.includes('uri')) return 'https://example.com';
+    if (name.includes('email')) return 'user@example.com';
+    if (name.includes('phone') || name.includes('tel')) return '555-0100';
+    if (name.includes('query')) return tool.includes('search') ? 'example search query' : 'query';
+    if (name.includes('id')) return 'id_' + Math.random().toString(36).substring(2, 8);
+    if (name.includes('desc') || name.includes('message') || name.includes('content')) return 'This is a mock response';
+    if (name.includes('type')) return 'default';
+    if (name.includes('format') || name.includes('ext')) return 'json';
+    if (name.includes('status')) return 'active';
+    if (name.includes('role')) return 'user';
+    if (name.includes('lang')) return 'en';
+    if (name.includes('version') || name.includes('ver')) return '1.0.0';
+    if (name.includes('branch')) return 'main';
+    if (name.includes('dir') || name.includes('folder')) return '/home/user/project';
+    return 'mock_value';
+  }
   case 'number':
-  case 'integer': return 42;
-  case 'boolean': return true;
-  case 'array': return [];
+  case 'integer': {
+    if (name.includes('count') || name.includes('limit') || name.includes('max') || name.includes('size')) return 10;
+    if (name.includes('min')) return 1;
+    if (name.includes('page')) return 1;
+    if (name.includes('port')) return 8080;
+    if (name.includes('timeout')) return 30000;
+    if (name.includes('temperature')) return 0.7;
+    if (name.includes('top_p') || name.includes('top')) return 0.9;
+    return 42;
+  }
+  case 'boolean': {
+    if (name.includes('enabled') || name.includes('active') || name.includes('debug')) return true;
+    return true;
+  }
+  case 'array': {
+    const itemsSchema = schema.items as Record<string, unknown> | undefined;
+    if (itemsSchema) {
+      return [generateSmartMockValue(toolName, paramName, itemsSchema)];
+    }
+    return [];
+  }
   case 'object': return {};
   default: return null;
   }
@@ -27,13 +70,13 @@ function generateMockArguments(toolFn: { name: string; parameters?: Record<strin
 
   for (const key of required) {
     const propSchema = properties[key] as Record<string, unknown> | undefined;
-    result[key] = generateMockValue(propSchema);
+    result[key] = generateSmartMockValue(toolFn.name, key, propSchema);
   }
 
   for (const key of Object.keys(properties)) {
     if (!required.includes(key) && Math.random() < 0.5) {
       const propSchema = properties[key] as Record<string, unknown> | undefined;
-      result[key] = generateMockValue(propSchema);
+      result[key] = generateSmartMockValue(toolFn.name, key, propSchema);
     }
   }
 

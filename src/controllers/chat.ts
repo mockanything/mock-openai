@@ -7,6 +7,7 @@ import { getReasoningContent, getResponseTemplate } from '../templates/index.js'
 import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
+import { recordBilling, BillingRecord } from '../services/billing.js';
 import { serverLogger } from '../utils/logger.js';
 
 const diskCache = new DiskCache();
@@ -118,16 +119,7 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   // 请求统计
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
 
-  // 缓存计算
-  const { hit, hitTokens = 0, missTokens = 0 } = diskCache.getHit(messages, tools);
-  diskCache.persistEndpoints(messages, tools);
-  if (hit) {
-    serverLogger.info(`[CACHE] HIT model=${model} msg_len=${messages.length} hit_len=${hitTokens} input=${inputTokens} cached=${hitTokens} miss=${missTokens}`);
-  } else {
-    serverLogger.info(`[CACHE] MISS model=${model} msg_len=${messages.length} hit_len=0 input=${inputTokens} `);
-  }
-
-  // 工具调用
+  // 工具调用（先于缓存检查，决定是否有工具调用）
   const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
   const toolCalls = createToolCalls(tools!, toolIndices);
 
@@ -138,17 +130,42 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
     serverLogger.info(`[TOOLS] model=${model} tool_calls=none`);
   }
 
+  // 缓存计算
+  const { hit, hitTokens = 0, missTokens = 0 } = diskCache.getHit(messages, tools);
+  diskCache.persistEndpoints(messages, tools);
+  if (hit) {
+    serverLogger.info(`[CACHE] HIT model=${model} msg_len=${messages.length} hit_len=${hitTokens} input=${inputTokens} cached=${hitTokens} miss=${missTokens}`);
+  } else {
+    serverLogger.info(`[CACHE] MISS model=${model} msg_len=${messages.length} hit_len=0 input=${inputTokens} `);
+  }
+
   // 结果生成
-  const outputContent = getResponseTemplate(messages);
+  const hasToolCalls = toolCalls.length > 0;
+  const outputContent = hasToolCalls ? '' : getResponseTemplate(messages);
   const outputReasoning = getReasoningContent(reasoning_effort);
 
   // 输出缓存落盘（输入消息 + 模型输出作为一个缓存单元）
   diskCache.persistOutputCache(messages, outputContent, outputReasoning, toolCalls, tools);
 
   // 响应统计
-  const outputContentTokens = countTokens(outputContent);
+  const outputContentTokens = hasToolCalls ? 0 : countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
+
+  const apiKey = (req.headers['x-api-key'] as string) || 'default';
+  const billingRecord: BillingRecord = {
+    api_key: apiKey,
+    model,
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || 0,
+    prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens || 0,
+    reasoning_tokens: outputReasoningTokens,
+    content_tokens: outputContentTokens,
+    stream,
+  };
+  recordBilling(billingRecord);
 
   await simulatePrefill(inputTokens, hit);
 
