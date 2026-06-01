@@ -6,6 +6,7 @@ import embeddingsRouter from './routes/embeddings.js';
 import billingRouter from './routes/billing.js';
 import { initBilling } from './services/billing.js';
 import { accessLogger, serverLogger } from './utils/logger.js';
+import { errorHandler } from './utils/errors.js';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use(modelsRouter);
 app.use(chatRouter);
 app.use(embeddingsRouter);
 app.use(billingRouter);
+app.use(errorHandler);
 
 initBilling().then(() => {
   app.listen(config.port, () => {

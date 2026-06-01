@@ -1,7 +1,8 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config.js';
 import { extractApiKey } from '../utils/helpers.js';
+import { ApiError } from '../utils/errors.js';
 
 function getModelSuffix(model: string): string {
   if (model.endsWith('-pro')) return 'pro';
@@ -13,14 +14,8 @@ const rateLimitOptions = {
   windowMs: 60 * 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (_req: Request, res: Response) => {
-    res.status(429).json({
-      error: {
-        message: 'Rate limit exceeded. Please pace your requests.',
-        type: 'rate_limit_error',
-        code: 429,
-      },
-    });
+  handler: (_req: Request, _res: Response, next: NextFunction) => {
+    next(new ApiError(429, 'Rate limit exceeded. Please pace your requests.'));
   },
 };
 

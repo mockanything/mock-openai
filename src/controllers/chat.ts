@@ -1,10 +1,11 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall, Tool } from '../types/openai.js';
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
 import { generateId, countTokens, countRequestTokens, extractApiKey } from '../utils/helpers.js';
+import { ApiError } from '../utils/errors.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
 import { recordBilling, BillingRecord } from '../services/billing.js';
@@ -109,34 +110,29 @@ function simulatePrefill(inputTokens: number, cacheHit: boolean): Promise<void> 
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
-export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): Promise<void> {
+export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response, _next: NextFunction): Promise<void> {
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'low', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: { message: 'messages is required', type: 'invalid_request_error', code: 400 } });
-    return;
+    throw new ApiError(400, 'Invalid request body: messages is required');
   }
 
   const apiKey = extractApiKey(req);
   if (apiKey === 'default' || !apiKey.startsWith('sk-')) {
-    res.status(401).json({ error: { message: 'Invalid API key. API key must start with sk-', type: 'authentication_error', code: 401 } });
-    return;
+    throw new ApiError(401, 'Invalid API key. Please check your API key.');
   }
 
   for (const msg of messages) {
     if (!msg.role) {
-      res.status(400).json({ error: { message: 'Each message must have a role', type: 'invalid_request_error', code: 400 } });
-      return;
+      throw new ApiError(422, 'Each message must have a "role" field');
     }
     if (!msg.content && msg.role !== 'assistant') {
-      res.status(400).json({ error: { message: `Message with role '${msg.role}' must have content`, type: 'invalid_request_error', code: 400 } });
-      return;
+      throw new ApiError(422, `Message with role "${msg.role}" must have content`);
     }
   }
 
   if (model && !modelIds.includes(model)) {
-    res.status(404).json({ error: { message: `The model '${model}' does not exist`, type: 'invalid_request_error', code: 404 } });
-    return;
+    throw new ApiError(422, `Invalid model: "${model}". Please check your model parameter.`);
   }
 
   // 请求统计
