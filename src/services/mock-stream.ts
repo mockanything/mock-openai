@@ -80,7 +80,9 @@ export function* createStreamingResponse(
         finish_reason: 'tool_calls',
       }],
     };
-    return;
+    if (!model.startsWith('benchmark-')) {
+      return;
+    }
   }
 
   const contentChunks = splitIntoChunks(content);

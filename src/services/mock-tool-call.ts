@@ -94,9 +94,17 @@ export function pickTools(tools: Tool[], model: string, toolChoice: ToolChoice |
   const isFlash = isFlashModel(model);
   const isPro = isProModel(model);
 
-  if (!isFlash && !isPro) return [];
-
-  if (toolChoice !== 'required' && isFlash && Math.random() >= 0.8) return [];
+  if (toolChoice === 'required') {
+    // Required tools are always called
+  } else if (isFlash && Math.random() < 0.9) {
+    // Flash models have a high chance to call all tools
+  } else if (isPro && Math.random() < 0.95) {
+    // Pro models have a high chance to call some tools
+  } else if (model.startsWith('benchmark-') && Math.random() < 0.99) {
+    // Benchmark models have a very high chance to call all tools
+  } else {
+    return [];
+  }
 
   const n = tools.length;
   const maxCalls = isPro ? n : Math.max(1, Math.floor(n / 2));
