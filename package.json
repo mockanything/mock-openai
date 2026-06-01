@@ -9,7 +9,8 @@
     "build": "tsc && node scripts/copy-templates.cjs",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
-    "serve": "pm2 start ecosystem.config.cjs"
+    "serve": "pm2 start ecosystem.config.cjs",
+    "1panel": "npm run build && npm run start"
   },
   "dependencies": {
     "dotenv": "^16.3.1",
