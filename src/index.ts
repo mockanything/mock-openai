@@ -4,9 +4,9 @@ import chatRouter from './routes/chat.js';
 import modelsRouter from './routes/models.js';
 import embeddingsRouter from './routes/embeddings.js';
 import billingRouter from './routes/billing.js';
-import { initBilling } from './services/billing.js';
+import { initBilling } from './services/mock-billing.js';
 import { accessLogger, serverLogger } from './utils/logger.js';
-import { errorHandler } from './utils/errors.js';
+import { errorHandler } from './middleware/error-handler.js';
 
 const app = express();
 
