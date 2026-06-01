@@ -1,5 +1,7 @@
 apple-v1-flash
 apple-v1-pro
+benchmark-v1-flash
+benchmark-v1-pro
 banana-v1-flash
 banana-v1-pro
 cherry-v1-flash
@@ -20,4 +22,3 @@ yuzu-v1-flash
 yuzu-v1-pro
 text-embedding-3-small
 text-embedding-3-large
-text-embedding-ada-002
