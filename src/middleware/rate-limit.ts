@@ -29,7 +29,7 @@ export const chatLimiter = rateLimit({
   keyGenerator: (req) => {
     const model = (req.body?.model as string) || config.defaultModel;
     const apiKey = extractApiKey(req);
-    return `${ipKeyGenerator(req.ip || '127.0.0.1')}:${getModelSuffix(model)}`;
+    return `${ipKeyGenerator(req.ip || '127.0.0.1')}:${apiKey}:${getModelSuffix(model)}`;
   },
   max: (req) => {
     const model = (req.body?.model as string) || config.defaultModel;

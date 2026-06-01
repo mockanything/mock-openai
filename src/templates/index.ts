@@ -8,6 +8,9 @@ const getDirname = () => {
   return dirname(fileURLToPath(import.meta.url));
 };
 
+const modelsText = readFileSync(join(getDirname(), './models.md'), 'utf-8');
+export const modelIds: string[] = modelsText.split('\n').filter(m => m.trim());
+
 const responseDir = join(getDirname(), './response');
 const responseTemplates: string[] = readdirSync(responseDir)
   .filter(f => f.endsWith('.md'))

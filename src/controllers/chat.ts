@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
 import { recordBilling, BillingRecord } from '../services/billing.js';
 import { serverLogger } from '../utils/logger.js';
+import { modelIds } from '../templates/index.js';
 
 const diskCache = new DiskCache();
 
@@ -112,7 +113,29 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'low', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: 'messages is required' });
+    res.status(400).json({ error: { message: 'messages is required', type: 'invalid_request_error', code: 400 } });
+    return;
+  }
+
+  const apiKey = extractApiKey(req);
+  if (apiKey === 'default' || !apiKey.startsWith('sk-')) {
+    res.status(401).json({ error: { message: 'Invalid API key. API key must start with sk-', type: 'authentication_error', code: 401 } });
+    return;
+  }
+
+  for (const msg of messages) {
+    if (!msg.role) {
+      res.status(400).json({ error: { message: 'Each message must have a role', type: 'invalid_request_error', code: 400 } });
+      return;
+    }
+    if (!msg.content && msg.role !== 'assistant') {
+      res.status(400).json({ error: { message: `Message with role '${msg.role}' must have content`, type: 'invalid_request_error', code: 400 } });
+      return;
+    }
+  }
+
+  if (model && !modelIds.includes(model)) {
+    res.status(404).json({ error: { message: `The model '${model}' does not exist`, type: 'invalid_request_error', code: 404 } });
     return;
   }
 
@@ -152,7 +175,6 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
-  const apiKey = extractApiKey(req);
   const billingRecord: BillingRecord = {
     api_key: apiKey,
     model,
