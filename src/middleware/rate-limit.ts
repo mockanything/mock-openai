@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config.js';
+import { extractApiKey } from '../utils/helpers.js';
 
 function getModelSuffix(model: string): string {
   if (model.endsWith('-pro')) return 'pro';
@@ -27,6 +28,7 @@ export const chatLimiter = rateLimit({
   ...rateLimitOptions,
   keyGenerator: (req) => {
     const model = (req.body?.model as string) || config.defaultModel;
+    const apiKey = extractApiKey(req);
     return `${ipKeyGenerator(req.ip || '127.0.0.1')}:${getModelSuffix(model)}`;
   },
   max: (req) => {

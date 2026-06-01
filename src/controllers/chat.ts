@@ -4,7 +4,7 @@ import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
-import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
+import { generateId, countTokens, countRequestTokens, extractApiKey } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
 import { recordBilling, BillingRecord } from '../services/billing.js';
@@ -152,7 +152,7 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
-  const apiKey = (req.headers['x-api-key'] as string) || 'default';
+  const apiKey = extractApiKey(req);
   const billingRecord: BillingRecord = {
     api_key: apiKey,
     model,
