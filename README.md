@@ -29,8 +29,8 @@ npm run dev
 |----------|---------|-------------|
 | PORT | 3000 | Server port |
 | DEFAULT_MODEL | apple-v1-flash | Default chat model |
-| RATE_LIMIT_FLASH | 20 | Flash model requests per minute |
-| RATE_LIMIT_PRO | 60 | Pro model requests per minute |
+| RATE_LIMIT_FLASH | 250 | Flash model requests per minute per key |
+| RATE_LIMIT_PRO | 50 | Pro model requests per minute per key |
 | RATE_LIMIT_MODELS | 100 | Models endpoint requests per minute |
 
 ## API
