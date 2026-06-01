@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
-import { queryBilling } from '../services/billing.js';
+import { queryBilling } from '../services/mock-billing.js';
+import { extractApiKey } from '../utils/helpers.js';
 
 export function handleBillingQuery(req: Request, res: Response): void {
-  const apiKey = (req.query.api_key as string) || (req.headers['x-api-key'] as string) || 'default';
+  const apiKey = (req.query.api_key as string) || extractApiKey(req);
   const startDate = req.query.start_date as string | undefined;
   const endDate = req.query.end_date as string | undefined;
 

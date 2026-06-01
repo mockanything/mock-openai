@@ -1,14 +1,16 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall, Tool } from '../types/openai.js';
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
-import { generateId, countTokens, countRequestTokens } from '../utils/helpers.js';
+import { generateId, countTokens, countRequestTokens, extractApiKey } from '../utils/helpers.js';
+import { ApiError } from '../utils/errors.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
-import { recordBilling, BillingRecord } from '../services/billing.js';
+import { recordBilling, BillingRecord } from '../services/mock-billing.js';
 import { serverLogger } from '../utils/logger.js';
+import { modelIds } from '../templates/index.js';
 
 const diskCache = new DiskCache();
 
@@ -108,12 +110,29 @@ function simulatePrefill(inputTokens: number, cacheHit: boolean): Promise<void> 
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
-export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response): Promise<void> {
+export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRequest>, res: Response, _next: NextFunction): Promise<void> {
   const { model = config.defaultModel, messages, stream = false, reasoning_effort = 'low', tools, tool_choice } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: 'messages is required' });
-    return;
+    throw new ApiError(400, 'Invalid request body: messages is required');
+  }
+
+  const apiKey = extractApiKey(req);
+  if (apiKey === 'default' || !apiKey.startsWith('sk-')) {
+    throw new ApiError(401, 'Invalid API key. Please check your API key.');
+  }
+
+  for (const msg of messages) {
+    if (!msg.role) {
+      throw new ApiError(422, 'Each message must have a "role" field');
+    }
+    if (!msg.content && msg.role !== 'assistant') {
+      throw new ApiError(422, `Message with role "${msg.role}" must have content`);
+    }
+  }
+
+  if (model && !modelIds.includes(model)) {
+    throw new ApiError(422, `Invalid model: "${model}". Please check your model parameter.`);
   }
 
   // 请求统计
@@ -152,7 +171,6 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
-  const apiKey = (req.headers['x-api-key'] as string) || 'default';
   const billingRecord: BillingRecord = {
     api_key: apiKey,
     model,

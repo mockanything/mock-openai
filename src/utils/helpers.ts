@@ -1,4 +1,13 @@
+import { Request } from 'express';
 import { ChatMessage, Tool } from '../types/openai.js';
+
+export function extractApiKey(req: Request): string {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return 'default';
+}
 
 export function generateId(): string {
   return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
