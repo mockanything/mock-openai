@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { queryBilling } from '../services/billing.js';
+import { queryBilling } from '../services/mock-billing.js';
 import { extractApiKey } from '../utils/helpers.js';
 
 export function handleBillingQuery(req: Request, res: Response): void {

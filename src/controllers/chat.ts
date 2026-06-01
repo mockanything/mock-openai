@@ -8,7 +8,7 @@ import { generateId, countTokens, countRequestTokens, extractApiKey } from '../u
 import { ApiError } from '../utils/errors.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
-import { recordBilling, BillingRecord } from '../services/billing.js';
+import { recordBilling, BillingRecord } from '../services/mock-billing.js';
 import { serverLogger } from '../utils/logger.js';
 import { modelIds } from '../templates/index.js';
 
