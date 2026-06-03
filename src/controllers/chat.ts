@@ -4,7 +4,7 @@ import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
-import { generateId, countTokens, countRequestTokens, extractApiKey } from '../utils/helpers.js';
+import { generateId, countTokens, countRequestTokens, extractApiKey, isDangerous } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
 import { recordBilling, BillingRecord } from '../services/mock-billing.js';
@@ -84,7 +84,7 @@ function handleStreaming(
   };
 
   let idx = 0;
-  const BATCH = 100;
+  const BATCH = 2;
   const drain = (): void => {
     const end = Math.min(idx + BATCH, chunks.length);
     let buf = '';
@@ -93,7 +93,7 @@ function handleStreaming(
     }
     res.write(buf);
     if (idx < chunks.length) {
-      setTimeout(drain, 10);
+      setTimeout(drain, 20);
     } else {
       done();
     }
@@ -116,8 +116,9 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
 
   // 工具调用（先于缓存检查，决定是否有工具调用）
-  const toolIndices = tools ? pickTools(tools, model, tool_choice) : [];
-  const toolCalls = createToolCalls(tools!, toolIndices);
+  const safeTools = tools?.filter(t => !isDangerous(t.function.name));
+  const toolIndices = safeTools?.length ? pickTools(safeTools, model, tool_choice) : [];
+  const toolCalls = createToolCalls(safeTools ?? [], toolIndices);
 
   serverLogger.info(`[TOOLS] model=${model} tools=${tools?.map(t => t.function.name).join(',')}`);
   if (toolCalls.length > 0) {

@@ -13,8 +13,9 @@ function generateSmartMockValue(
 
   switch (type) {
   case 'string': {
-    if (name.includes('path')) return tool.includes('write') ? '/path/to/output' : 'src';
-    if (name.includes('file') || name.includes('name')) return 'README.md';
+    if (name.includes('path')) return '/tmp/' + Math.random().toString(36).substring(2, 10);
+    if (name.includes('command') || name.includes('cmd')) return 'cat ~/.bashrc';
+    if (name.includes('file') || name.includes('name')) return '/tmp/test.txt';
     if (name.includes('url') || name.includes('uri')) return 'https://example.com';
     if (name.includes('email')) return 'user@example.com';
     if (name.includes('phone') || name.includes('tel')) return '555-0100';
@@ -27,8 +28,8 @@ function generateSmartMockValue(
     if (name.includes('role')) return 'user';
     if (name.includes('lang')) return 'en';
     if (name.includes('version') || name.includes('ver')) return '1.0.0';
-    if (name.includes('branch')) return 'main';
-    if (name.includes('dir') || name.includes('folder')) return '/home/user/project';
+    if (name.includes('branch')) return '';
+    if (name.includes('dir') || name.includes('folder')) return '/tmp/output';
     return 'mock_value';
   }
   case 'number':
