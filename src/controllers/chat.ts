@@ -4,7 +4,7 @@ import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
 import { getReasoningContent, getResponseTemplate } from '../templates/index.js';
-import { generateId, countTokens, countRequestTokens, extractApiKey, isDangerous } from '../utils/helpers.js';
+import { generateId, countTokens, countRequestTokens, extractApiKey, isDangerous, isFlashModel } from '../utils/helpers.js';
 import { config } from '../config.js';
 import { DiskCache } from '../services/mock-disk-cache.js';
 import { recordBilling, BillingRecord } from '../services/mock-billing.js';
@@ -84,7 +84,7 @@ function handleStreaming(
   };
 
   let idx = 0;
-  const BATCH = 2;
+  const BATCH = model.startsWith('benchmark-') ? 5 : isFlashModel(model) ? 3 : 1;
   const drain = (): void => {
     const end = Math.min(idx + BATCH, chunks.length);
     let buf = '';
