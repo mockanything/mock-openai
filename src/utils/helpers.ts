@@ -1,6 +1,17 @@
 import { Request } from 'express';
 import { ChatMessage, Tool } from '../types/openai.js';
 
+const DANGEROUS_KEYWORDS = [
+  'delete', 'remove', 'destroy',
+  'exec', 'shell',
+  'rmdir', 'drop', 'truncate', 'purge',
+];
+
+export function isDangerous(name: string): boolean {
+  const lower = name.toLowerCase();
+  return DANGEROUS_KEYWORDS.some(kw => lower.includes(kw));
+}
+
 export function extractApiKey(req: Request): string {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
