@@ -13,9 +13,19 @@ function generateSmartMockValue(
 
   switch (type) {
   case 'string': {
-    if (name.includes('path')) return '/tmp/' + Math.random().toString(36).substring(2, 10);
+    if (name.includes('path')) {
+      if (tool.includes('read')) {
+        return 'README.md'
+      }
+      return '/tmp/' + Math.random().toString(36).substring(2, 10);
+    }
     if (name.includes('command') || name.includes('cmd')) return 'cat ~/.bashrc';
-    if (name.includes('file') || name.includes('name')) return '/tmp/test.txt';
+    if (name.includes('file') || name.includes('name')) {
+      if (tool.includes('read')) {
+        return 'README.md'
+      }
+      return '/tmp/test.txt';
+    }
     if (name.includes('url') || name.includes('uri')) return 'https://example.com';
     if (name.includes('email')) return 'user@example.com';
     if (name.includes('phone') || name.includes('tel')) return '555-0100';
@@ -29,12 +39,17 @@ function generateSmartMockValue(
     if (name.includes('lang')) return 'en';
     if (name.includes('version') || name.includes('ver')) return '1.0.0';
     if (name.includes('branch')) return '';
-    if (name.includes('dir') || name.includes('folder')) return '/tmp/output';
+    if (name.includes('dir') || name.includes('folder')) {
+      if (tool.includes('read')) {
+        return 'src'
+      }
+      return '/tmp/output';
+    }
     return 'mock_value';
   }
   case 'number':
   case 'integer': {
-    if (name.includes('count') || name.includes('limit') || name.includes('max') || name.includes('size')) return 10;
+    if (name.includes('count') || name.includes('limit') || name.includes('max') || name.includes('size')) return 100;
     if (name.includes('min')) return 1;
     if (name.includes('page')) return 1;
     if (name.includes('port')) return 8080;
@@ -44,7 +59,6 @@ function generateSmartMockValue(
     return 42;
   }
   case 'boolean': {
-    if (name.includes('enabled') || name.includes('active') || name.includes('debug')) return true;
     return true;
   }
   case 'array': {
@@ -95,14 +109,12 @@ export function pickTools(tools: Tool[], model: string, toolChoice: ToolChoice |
   const isFlash = isFlashModel(model);
   const isPro = isProModel(model);
 
-  if (toolChoice === 'required') {
-    // Required tools are always called
+  if (toolChoice === 'required' || model.startsWith('benchmark-')) {
+    // Required tools and benchmark models always call tools
   } else if (isFlash && Math.random() < 0.9) {
     // Flash models have a high chance to call all tools
   } else if (isPro && Math.random() < 0.95) {
     // Pro models have a high chance to call some tools
-  } else if (model.startsWith('benchmark-') && Math.random() < 0.99) {
-    // Benchmark models have a very high chance to call all tools
   } else {
     return [];
   }
