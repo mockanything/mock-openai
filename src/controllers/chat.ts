@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ChatMessage, ToolCall, Tool } from '../types/openai.js';
+import { ChatCompletionRequest, ChatCompletionChunkResponse, ChatCompletionUsage, ToolCall } from '../types/openai.js';
 import { createNonStreamingResponse } from '../services/mock-non-stream.js';
 import { createToolCalls, pickTools } from '../services/mock-tool-call.js';
 import { createStreamingResponse } from '../services/mock-stream.js';
@@ -115,7 +115,7 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   // 请求统计
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
 
-  const isBenchmark = model.startsWith('benchmark-')
+  const isBenchmark = model.startsWith('benchmark-');
 
   // 工具调用（先于缓存检查，决定是否有工具调用）
   const safeTools = tools?.filter(t => !isDangerous(t.function.name));
@@ -140,7 +140,7 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
 
   // 结果生成
   const hasToolCalls = toolCalls.length > 0;
-  let hasContent = hasToolCalls && !isBenchmark
+  const hasContent = hasToolCalls && !isBenchmark;
   const outputContent = hasContent ? getResponseTemplate(messages) : '';
   const outputReasoning = getReasoningContent(reasoning_effort);
 
