@@ -115,6 +115,8 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
   // 请求统计
   const { total: inputTokens, contentTokens: inputContentTokens, reasoningTokens: inputReasoningTokens } = countRequestTokens(messages, tools);
 
+  const isBenchmark = model.startsWith('benchmark-')
+
   // 工具调用（先于缓存检查，决定是否有工具调用）
   const safeTools = tools?.filter(t => !isDangerous(t.function.name));
   const toolIndices = safeTools?.length ? pickTools(safeTools, model, tool_choice) : [];
@@ -138,14 +140,15 @@ export async function handleChatCompletion(req: Request<{}, {}, ChatCompletionRe
 
   // 结果生成
   const hasToolCalls = toolCalls.length > 0;
-  const outputContent = hasToolCalls ? '' : getResponseTemplate(messages);
+  let hasContent = hasToolCalls && !isBenchmark
+  const outputContent = hasContent ? getResponseTemplate(messages) : '';
   const outputReasoning = getReasoningContent(reasoning_effort);
 
   // 输出缓存落盘（输入消息 + 模型输出作为一个缓存单元）
   diskCache.persistOutputCache(messages, outputContent, outputReasoning, toolCalls, tools);
 
   // 响应统计
-  const outputContentTokens = hasToolCalls ? 0 : countTokens(outputContent);
+  const outputContentTokens = countTokens(outputContent);
   const outputReasoningTokens = countTokens(outputReasoning);
   const usage = buildUsage(inputTokens, inputContentTokens, inputReasoningTokens, outputContentTokens, outputReasoningTokens, hitTokens, missTokens);
 
