@@ -15,14 +15,14 @@ function generateSmartMockValue(
   case 'string': {
     if (name.includes('path')) {
       if (tool.includes('read')) {
-        return 'README.md'
+        return 'README.md';
       }
       return '/tmp/' + Math.random().toString(36).substring(2, 10);
     }
     if (name.includes('command') || name.includes('cmd')) return 'cat ~/.bashrc';
     if (name.includes('file') || name.includes('name')) {
       if (tool.includes('read')) {
-        return 'README.md'
+        return 'README.md';
       }
       return '/tmp/test.txt';
     }
@@ -41,7 +41,7 @@ function generateSmartMockValue(
     if (name.includes('branch')) return '';
     if (name.includes('dir') || name.includes('folder')) {
       if (tool.includes('read')) {
-        return 'src'
+        return 'src';
       }
       return '/tmp/output';
     }
